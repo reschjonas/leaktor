@@ -1,0 +1,185 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Leaktor v${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## Leaktor v${{ steps.get_version.outputs.VERSION }}
+
+          ### 🚀 Installation
+
+          **Linux (x86_64):**
+          ```bash
+          curl -L https://github.com/reschjonas/leaktor/releases/download/${{ github.ref_name }}/leaktor-linux-amd64 -o leaktor
+          chmod +x leaktor
+          sudo mv leaktor /usr/local/bin/
+          ```
+
+          **macOS (Intel):**
+          ```bash
+          curl -L https://github.com/reschjonas/leaktor/releases/download/${{ github.ref_name }}/leaktor-macos-amd64 -o leaktor
+          chmod +x leaktor
+          sudo mv leaktor /usr/local/bin/
+          ```
+
+          **macOS (Apple Silicon):**
+          ```bash
+          curl -L https://github.com/reschjonas/leaktor/releases/download/${{ github.ref_name }}/leaktor-macos-arm64 -o leaktor
+          chmod +x leaktor
+          sudo mv leaktor /usr/local/bin/
+          ```
+
+          **Windows:**
+          Download `leaktor-windows-amd64.exe` and add to your PATH.
+
+          **Using Cargo:**
+          ```bash
+          cargo install leaktor
+          ```
+
+          ### 📦 Assets
+          See below for pre-built binaries for all platforms.
+
+          ### 📝 Changelog
+          See [CHANGELOG.md](https://github.com/reschjonas/leaktor/blob/master/CHANGELOG.md) for details.
+        draft: false
+        prerelease: false
+
+  build-and-upload:
+    name: Build and Upload
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: leaktor
+            asset_name: leaktor-linux-amd64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: leaktor.exe
+            asset_name: leaktor-windows-amd64.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: leaktor
+            asset_name: leaktor-macos-amd64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: leaktor
+            asset_name: leaktor-macos-arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        target: ${{ matrix.target }}
+        override: true
+
+    - name: Build release binary
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Strip binary (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+    - name: Create archive (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      run: |
+        cd target/${{ matrix.target }}/release
+        tar czf ../../../${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
+        cd -
+
+    - name: Create archive (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd target/${{ matrix.target }}/release
+        7z a ../../../${{ matrix.asset_name }}.zip ${{ matrix.artifact_name }}
+        cd -
+
+    - name: Upload binary
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        asset_name: ${{ matrix.asset_name }}
+        asset_content_type: application/octet-stream
+
+    - name: Upload archive (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./${{ matrix.asset_name }}.tar.gz
+        asset_name: ${{ matrix.asset_name }}.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload archive (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./${{ matrix.asset_name }}.zip
+        asset_name: ${{ matrix.asset_name }}.zip
+        asset_content_type: application/zip
+
+  publish-crate:
+    name: Publish to crates.io
+    needs: build-and-upload
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Publish to crates.io
+      run: cargo publish --token ${{ secrets.CARGO_TOKEN }}
+      continue-on-error: true

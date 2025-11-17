@@ -1,0 +1,143 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  benchmark:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build release
+      run: cargo build --release
+
+    - name: Create test repository
+      run: |
+        mkdir -p test-repo
+        cd test-repo
+        git init
+
+        # Create some test files with secrets
+        echo "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE" > config.env
+        echo "GITHUB_TOKEN=ghp_1234567890123456789012345678901234" >> config.env
+        echo "mongodb://user:password@host:27017/db" >> config.env
+
+        for i in {1..100}; do
+          echo "# File $i" > "file_$i.js"
+          echo "const api_key = 'sk_live_" >> "file_$i.js"
+          head -c 32 < /dev/urandom | base64 | head -c 32 >> "file_$i.js"
+          echo "';" >> "file_$i.js"
+        done
+
+        git add .
+        git commit -m "Test commit"
+
+    - name: Benchmark scan speed
+      run: |
+        echo "### Performance Benchmark Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Small repo
+        echo "#### Small Repository (100 files)" >> $GITHUB_STEP_SUMMARY
+        time_output=$( { time -p ../target/release/leaktor scan test-repo 2>&1; } 2>&1 )
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "$time_output" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+        # Without git history
+        echo "#### Scan without Git History" >> $GITHUB_STEP_SUMMARY
+        time_output=$( { time -p ../target/release/leaktor scan test-repo --git-history false 2>&1; } 2>&1 )
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "$time_output" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+    - name: Memory usage check
+      run: |
+        # Run with memory profiling
+        /usr/bin/time -v ./target/release/leaktor scan test-repo > memory_usage.txt 2>&1 || true
+
+        echo "#### Memory Usage" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        grep -E "(Maximum resident|Elapsed)" memory_usage.txt >> $GITHUB_STEP_SUMMARY || true
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  comparison:
+    name: Compare with Other Tools
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build Leaktor
+      run: cargo build --release
+
+    - name: Install other tools
+      run: |
+        # Install gitleaks
+        wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz
+        tar -xzf gitleaks_8.18.0_linux_x64.tar.gz
+        chmod +x gitleaks
+
+    - name: Create test data
+      run: |
+        mkdir test-data
+        cd test-data
+        git init
+        cat > secrets.env << EOF
+        AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+        AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+        GITHUB_TOKEN=ghp_EXAMPLETOKEN1234567890123456789012
+        STRIPE_KEY=sk_test_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+        MONGO_URI=mongodb://testuser:testpass123@example.mongodb.net/testdb
+        EOF
+        git add .
+        git commit -m "Add secrets"
+
+    - name: Run comparison
+      run: |
+        echo "### Tool Comparison" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Leaktor
+        echo "#### Leaktor" >> $GITHUB_STEP_SUMMARY
+        leaktor_output=$(./target/release/leaktor scan test-data 2>&1 | grep "Total Findings:" || echo "Failed")
+        echo "- $leaktor_output" >> $GITHUB_STEP_SUMMARY
+
+        # Gitleaks
+        echo "#### Gitleaks" >> $GITHUB_STEP_SUMMARY
+        gitleaks_output=$(./gitleaks detect -s test-data 2>&1 | grep -E "finding|leak" || echo "Failed")
+        echo "- $gitleaks_output" >> $GITHUB_STEP_SUMMARY

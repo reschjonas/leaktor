@@ -1,0 +1,27 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+*.sarif
+*.html
+results.json
+leaktor-report.html
+
+# Local config
+.leaktor.toml
+.leaktor.yaml
+.leaktor.yml
+.leaktorignore

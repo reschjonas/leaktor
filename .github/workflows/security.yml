@@ -1,0 +1,156 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    # Run weekly on Monday at 9:00 UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  leaktor-scan:
+    name: Leaktor Self-Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full git history for comprehensive scan
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build Leaktor
+      run: cargo build --release
+
+    - name: Run Leaktor scan (Console)
+      run: |
+        ./target/release/leaktor scan --verbose --format console
+      continue-on-error: true
+
+    - name: Run Leaktor scan (SARIF)
+      run: |
+        ./target/release/leaktor scan --format sarif --output leaktor-results.sarif
+      continue-on-error: true
+
+    - name: Upload SARIF to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: leaktor-results.sarif
+        category: leaktor-scan
+
+    - name: Run Leaktor scan (JSON)
+      run: |
+        ./target/release/leaktor scan --format json --output leaktor-results.json
+
+    - name: Upload scan results
+      uses: actions/upload-artifact@v4
+      with:
+        name: leaktor-scan-results
+        path: |
+          leaktor-results.sarif
+          leaktor-results.json
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v3
+
+  cargo-audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+
+    - name: Run cargo audit
+      run: cargo audit --json > audit-results.json
+      continue-on-error: true
+
+    - name: Upload audit results
+      uses: actions/upload-artifact@v4
+      with:
+        name: cargo-audit-results
+        path: audit-results.json
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: 'cpp'  # Rust compiles to native, so use cpp
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build
+      run: cargo build --release
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: codeql
+
+  trivy-scan:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+        category: trivy-scan
