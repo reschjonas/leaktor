@@ -182,9 +182,9 @@ impl ContextAnalyzer {
         // Check for obvious example/dummy patterns in the actual value part
         // Extract potential secret value (after = or : or in quotes)
         let value_part = if let Some(eq_pos) = line.find('=') {
-            &line[eq_pos + 1..].trim()
+            line[eq_pos + 1..].trim()
         } else if let Some(colon_pos) = line.find(':') {
-            &line[colon_pos + 1..].trim()
+            line[colon_pos + 1..].trim()
         } else {
             line
         };

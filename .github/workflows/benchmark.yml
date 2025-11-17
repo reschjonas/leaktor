@@ -67,14 +67,14 @@ jobs:
 
         # Small repo
         echo "#### Small Repository (100 files)" >> $GITHUB_STEP_SUMMARY
-        time_output=$( { time -p ../target/release/leaktor scan test-repo 2>&1; } 2>&1 )
+        time_output=$( { time -p ./target/release/leaktor scan test-repo 2>&1; } 2>&1 )
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "$time_output" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
         # Without git history
         echo "#### Scan without Git History" >> $GITHUB_STEP_SUMMARY
-        time_output=$( { time -p ../target/release/leaktor scan test-repo --git-history false 2>&1; } 2>&1 )
+        time_output=$( { time -p ./target/release/leaktor scan test-repo --git-history false 2>&1; } 2>&1 )
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "$time_output" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

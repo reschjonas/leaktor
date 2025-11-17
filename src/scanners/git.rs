@@ -1,9 +1,7 @@
 use crate::detectors::{ContextAnalyzer, PatternDetector};
 use crate::models::{Finding, Location};
 use anyhow::{Context, Result};
-use git2::{Commit, Diff, DiffOptions, Object, Oid, Repository};
-use rayon::prelude::*;
-use std::collections::HashSet;
+use git2::{Commit, Diff, DiffOptions, Repository};
 use std::path::{Path, PathBuf};
 
 pub struct GitScanner {
@@ -57,10 +55,9 @@ impl GitScanner {
         let mut revwalk = repo.revwalk()?;
         revwalk.push_head()?;
 
-        let mut commit_count = 0;
         let max_commits = self.max_depth.unwrap_or(usize::MAX);
 
-        for oid in revwalk {
+        for (commit_count, oid) in revwalk.enumerate() {
             if commit_count >= max_commits {
                 break;
             }
@@ -69,7 +66,6 @@ impl GitScanner {
             let commit = repo.find_commit(oid)?;
 
             findings.extend(self.scan_commit(repo, &commit)?);
-            commit_count += 1;
         }
 
         Ok(findings)

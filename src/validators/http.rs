@@ -4,6 +4,7 @@ use anyhow::Result;
 use reqwest::Client;
 
 pub struct HttpValidator {
+    #[allow(dead_code)]
     client: Client,
 }
 
@@ -19,6 +20,7 @@ impl HttpValidator {
 
     /// Generic HTTP-based validation
     /// This can be extended for various API keys that can be validated via HTTP
+    #[allow(dead_code)]
     async fn validate_http_endpoint(&self, url: &str, token: &str) -> Result<bool> {
         let response = self
             .client
