@@ -152,6 +152,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn scan_command(
     path: PathBuf,
     format: String,
@@ -283,7 +284,7 @@ async fn scan_command(
                 format!("✓ HTML report written to {}", output_path.display()).green()
             );
         }
-        "console" | _ => {
+        _ => {
             let console_output = ConsoleOutput::new(verbose, context);
             console_output.display(&findings);
 
@@ -330,7 +331,7 @@ fn config_command(path: PathBuf, format: String) -> Result<()> {
         "yaml" | "yml" => {
             config.to_yaml_file(&path)?;
         }
-        "toml" | _ => {
+        _ => {
             config.to_toml_file(&path)?;
         }
     }
