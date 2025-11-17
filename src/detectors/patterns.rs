@@ -341,7 +341,9 @@ mod tests {
         let line = "REDIS_URL=redis://:super_secret_redis_pass@redis-cluster.internal:6379";
         let secrets = detector.scan_line(line, 3.0);
         assert!(!secrets.is_empty(), "Redis pattern should match");
-        let has_redis = secrets.iter().any(|s| matches!(s.secret_type, SecretType::RedisConnectionString));
+        let has_redis = secrets
+            .iter()
+            .any(|s| matches!(s.secret_type, SecretType::RedisConnectionString));
         assert!(has_redis, "Should detect Redis connection string");
     }
 }

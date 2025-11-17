@@ -55,6 +55,8 @@ jobs:
           echo "';" >> "file_$i.js"
         done
 
+        git config user.email "benchmark@leaktor.test"
+        git config user.name "Leaktor Benchmark"
         git add .
         git commit -m "Test commit"
 
@@ -124,6 +126,8 @@ jobs:
         STRIPE_KEY=sk_test_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
         MONGO_URI=mongodb://testuser:testpass123@example.mongodb.net/testdb
         EOF
+        git config user.email "benchmark@leaktor.test"
+        git config user.name "Leaktor Benchmark"
         git add .
         git commit -m "Add secrets"
 

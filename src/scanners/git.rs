@@ -39,8 +39,7 @@ impl GitScanner {
     }
 
     pub fn scan(&self) -> Result<Vec<Finding>> {
-        let repo = Repository::open(&self.repo_path)
-            .context("Failed to open git repository")?;
+        let repo = Repository::open(&self.repo_path).context("Failed to open git repository")?;
 
         let mut findings = Vec::new();
 
@@ -230,14 +229,7 @@ mod tests {
         let tree = repo.find_tree(tree_id)?;
         let sig = git2::Signature::now("Test", "test@example.com")?;
 
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            "Initial commit",
-            &tree,
-            &[],
-        )?;
+        repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
 
         Ok((temp_dir, repo))
     }

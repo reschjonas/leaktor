@@ -36,12 +36,18 @@ impl ConsoleOutput {
     }
 
     fn print_banner(&self) {
-        println!("{}", "╔═══════════════════════════════════════════════╗".bright_cyan());
+        println!(
+            "{}",
+            "╔═══════════════════════════════════════════════╗".bright_cyan()
+        );
         println!(
             "{}",
             "║           🔒 LEAKTOR SECURITY SCAN            ║".bright_cyan()
         );
-        println!("{}", "╚═══════════════════════════════════════════════╝".bright_cyan());
+        println!(
+            "{}",
+            "╚═══════════════════════════════════════════════╝".bright_cyan()
+        );
         println!();
     }
 
@@ -93,7 +99,12 @@ impl ConsoleOutput {
             "{} {} {} {}",
             format!("[{}]", index + 1).dimmed(),
             severity_icon,
-            finding.secret.secret_type.as_str().color(severity_color).bold(),
+            finding
+                .secret
+                .secret_type
+                .as_str()
+                .color(severity_color)
+                .bold(),
             format!("[{}]", finding.severity().as_str())
                 .color(severity_color)
                 .bold()
@@ -141,10 +152,10 @@ impl ConsoleOutput {
             }
             println!(
                 "    {}",
-                finding
-                    .context
-                    .line_content
-                    .replace(&finding.secret.value, &finding.secret.redacted_value.red().to_string())
+                finding.context.line_content.replace(
+                    &finding.secret.value,
+                    &finding.secret.redacted_value.red().to_string()
+                )
             );
             if let Some(ref after) = finding.context.line_after {
                 println!("    {}", after.dimmed());
@@ -189,7 +200,9 @@ impl ConsoleOutput {
         if findings_count == 0 {
             println!(
                 "{}",
-                "✓ No secrets detected! Your code looks clean.".green().bold()
+                "✓ No secrets detected! Your code looks clean."
+                    .green()
+                    .bold()
             );
         } else {
             println!(

@@ -201,8 +201,7 @@ async fn scan_command(
         scanner.scan()?
     } else {
         spinner.set_message("Scanning filesystem...");
-        let scanner = FilesystemScanner::new(path.clone())
-            .with_entropy_threshold(entropy);
+        let scanner = FilesystemScanner::new(path.clone()).with_entropy_threshold(entropy);
 
         scanner.scan()?
     };
@@ -257,8 +256,7 @@ async fn scan_command(
                 output_formatter.write_to_file(&findings, &output_path)?;
                 println!(
                     "{}",
-                    format!("✓ Results written to {}", output_path.display())
-                        .green()
+                    format!("✓ Results written to {}", output_path.display()).green()
                 );
             } else {
                 println!("{}", output_formatter.format(&findings)?);
@@ -270,8 +268,7 @@ async fn scan_command(
                 output_formatter.write_to_file(&findings, &output_path)?;
                 println!(
                     "{}",
-                    format!("✓ Results written to {}", output_path.display())
-                        .green()
+                    format!("✓ Results written to {}", output_path.display()).green()
                 );
             } else {
                 println!("{}", output_formatter.format(&findings)?);
@@ -283,8 +280,7 @@ async fn scan_command(
             output_formatter.write_to_file(&findings, &output_path)?;
             println!(
                 "{}",
-                format!("✓ HTML report written to {}", output_path.display())
-                    .green()
+                format!("✓ HTML report written to {}", output_path.display()).green()
             );
         }
         "console" | _ => {
@@ -317,8 +313,7 @@ fn init_command(path: PathBuf) -> Result<()> {
 
     println!(
         "{}",
-        format!("✓ Created .leaktorignore file at {}", path.display())
-            .green()
+        format!("✓ Created .leaktorignore file at {}", path.display()).green()
     );
     println!("\nAdd patterns to ignore specific files or secrets:");
     println!("  {}", "*.test.js".dimmed());
@@ -389,11 +384,13 @@ exit 0
 
     println!(
         "{}",
-        format!("✓ Pre-commit hook installed at {}", hook_path.display())
-            .green()
+        format!("✓ Pre-commit hook installed at {}", hook_path.display()).green()
     );
     println!("\nThe hook will run automatically before each commit.");
-    println!("Use {} to bypass the hook if needed.", "'git commit --no-verify'".yellow());
+    println!(
+        "Use {} to bypass the hook if needed.",
+        "'git commit --no-verify'".yellow()
+    );
 
     Ok(())
 }
@@ -433,7 +430,16 @@ fn list_command() {
             .push(secret_name.to_string());
     }
 
-    let categories = ["AWS", "Google Cloud", "Azure", "GitHub", "GitLab", "Private Keys", "Databases", "Other"];
+    let categories = [
+        "AWS",
+        "Google Cloud",
+        "Azure",
+        "GitHub",
+        "GitLab",
+        "Private Keys",
+        "Databases",
+        "Other",
+    ];
 
     for category in categories {
         if let Some(items) = by_category.get(category) {
@@ -445,6 +451,6 @@ fn list_command() {
         }
     }
 
-    println!("{}",  "Total patterns: ".bold());
+    println!("{}", "Total patterns: ".bold());
     println!("{}", leaktor::detectors::patterns::PATTERNS.len());
 }

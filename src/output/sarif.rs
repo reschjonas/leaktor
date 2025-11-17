@@ -114,7 +114,10 @@ impl SarifOutput {
         let mut rules = std::collections::HashMap::new();
 
         for finding in findings {
-            let rule_id = format!("leaktor/{}", finding.secret.secret_type.as_str().replace(' ', "-"));
+            let rule_id = format!(
+                "leaktor/{}",
+                finding.secret.secret_type.as_str().replace(' ', "-")
+            );
 
             rules.entry(rule_id.clone()).or_insert_with(|| SarifRule {
                 id: rule_id.clone(),
@@ -143,7 +146,10 @@ impl SarifOutput {
         let results: Vec<SarifResult> = findings
             .iter()
             .map(|finding| {
-                let rule_id = format!("leaktor/{}", finding.secret.secret_type.as_str().replace(' ', "-"));
+                let rule_id = format!(
+                    "leaktor/{}",
+                    finding.secret.secret_type.as_str().replace(' ', "-")
+                );
 
                 SarifResult {
                     rule_id,

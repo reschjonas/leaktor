@@ -1,7 +1,7 @@
-pub mod patterns;
-pub mod entropy;
 pub mod context;
+pub mod entropy;
+pub mod patterns;
 
-pub use patterns::PatternDetector;
-pub use entropy::EntropyAnalyzer;
 pub use context::ContextAnalyzer;
+pub use entropy::EntropyAnalyzer;
+pub use patterns::PatternDetector;

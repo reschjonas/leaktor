@@ -186,7 +186,10 @@ impl HtmlOutput {
 
         // Summary statistics
         let (critical, high, medium, low) = self.count_by_severity(findings);
-        let validated = findings.iter().filter(|f| f.secret.validated == Some(true)).count();
+        let validated = findings
+            .iter()
+            .filter(|f| f.secret.validated == Some(true))
+            .count();
 
         html.push_str(&format!(
             r#"

@@ -1,8 +1,8 @@
-pub mod git;
 pub mod filesystem;
+pub mod git;
 
-pub use git::GitScanner;
 pub use filesystem::FilesystemScanner;
+pub use git::GitScanner;
 
 use crate::models::Finding;
 use anyhow::Result;

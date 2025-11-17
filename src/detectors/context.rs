@@ -65,15 +65,7 @@ impl ContextAnalyzer {
     fn is_config_file(path: &str, extension: &str) -> bool {
         matches!(
             extension,
-            "yml"
-                | "yaml"
-                | "toml"
-                | "ini"
-                | "conf"
-                | "config"
-                | "properties"
-                | "env"
-                | "json"
+            "yml" | "yaml" | "toml" | "ini" | "conf" | "config" | "properties" | "env" | "json"
         ) || path.contains("/.env")
             || path.contains("config")
             || path.ends_with(".npmrc")
@@ -219,7 +211,8 @@ impl ContextAnalyzer {
             if value_lower == *example
                 || value_lower.starts_with(&format!("\"{example}"))
                 || value_lower.starts_with(&format!("'{example}"))
-                || (value_lower.len() < 20 && value_lower.contains(example)) {
+                || (value_lower.len() < 20 && value_lower.contains(example))
+            {
                 return true;
             }
         }
@@ -326,6 +319,8 @@ mod tests {
         assert!(ContextAnalyzer::is_placeholder("API_KEY=your_api_key_here"));
         assert!(ContextAnalyzer::is_placeholder("password: replace_me"));
         assert!(ContextAnalyzer::is_placeholder("TOKEN=xxxxxxxxxxxxxxxx"));
-        assert!(!ContextAnalyzer::is_placeholder("const value = 'actual_secret'"));
+        assert!(!ContextAnalyzer::is_placeholder(
+            "const value = 'actual_secret'"
+        ));
     }
 }

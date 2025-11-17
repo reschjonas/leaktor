@@ -59,8 +59,6 @@ impl Finding {
 
     pub fn is_likely_false_positive(&self) -> bool {
         // Lower confidence or test files are more likely false positives
-        self.secret.confidence < 0.7
-            || self.context.is_test_file
-            || self.context.is_documentation
+        self.secret.confidence < 0.7 || self.context.is_test_file || self.context.is_documentation
     }
 }

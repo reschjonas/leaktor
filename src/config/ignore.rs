@@ -164,10 +164,7 @@ mod tests {
         let mut manager = IgnoreManager::new();
         manager.add_pattern("*.test.js".to_string());
 
-        assert!(manager.should_ignore(
-            Path::new("src/auth.test.js"),
-            "const secret = 'test';"
-        ));
+        assert!(manager.should_ignore(Path::new("src/auth.test.js"), "const secret = 'test';"));
         assert!(!manager.should_ignore(Path::new("src/auth.js"), "const secret = 'test';"));
     }
 

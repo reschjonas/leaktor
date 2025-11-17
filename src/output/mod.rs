@@ -1,12 +1,12 @@
+pub mod console;
+pub mod html;
 pub mod json;
 pub mod sarif;
-pub mod html;
-pub mod console;
 
+pub use console::ConsoleOutput;
+pub use html::HtmlOutput;
 pub use json::JsonOutput;
 pub use sarif::SarifOutput;
-pub use html::HtmlOutput;
-pub use console::ConsoleOutput;
 
 use crate::models::Finding;
 use anyhow::Result;

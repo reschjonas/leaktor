@@ -119,23 +119,26 @@ impl FilesystemScanner {
                     secret.confidence *= 0.75;
                 }
                 // Adjust severity based on context
-                secret.severity = ContextAnalyzer::adjust_severity(secret.severity, &Context {
-                    line_before: if line_num > 0 {
-                        Some(lines[line_num - 1].to_string())
-                    } else {
-                        None
+                secret.severity = ContextAnalyzer::adjust_severity(
+                    secret.severity,
+                    &Context {
+                        line_before: if line_num > 0 {
+                            Some(lines[line_num - 1].to_string())
+                        } else {
+                            None
+                        },
+                        line_content: line.to_string(),
+                        line_after: if line_num + 1 < lines.len() {
+                            Some(lines[line_num + 1].to_string())
+                        } else {
+                            None
+                        },
+                        is_test_file: file_context.is_test_file,
+                        is_config_file: file_context.is_config_file,
+                        is_documentation: file_context.is_documentation,
+                        file_extension: file_context.file_extension.clone(),
                     },
-                    line_content: line.to_string(),
-                    line_after: if line_num + 1 < lines.len() {
-                        Some(lines[line_num + 1].to_string())
-                    } else {
-                        None
-                    },
-                    is_test_file: file_context.is_test_file,
-                    is_config_file: file_context.is_config_file,
-                    is_documentation: file_context.is_documentation,
-                    file_extension: file_context.file_extension.clone(),
-                });
+                );
 
                 let location = Location {
                     file_path: file_path.clone(),
@@ -172,10 +175,9 @@ impl FilesystemScanner {
 
     fn is_likely_binary(&self, path: &Path) -> bool {
         let binary_extensions = [
-            "exe", "dll", "so", "dylib", "bin", "dat", "db", "sqlite", "jpg", "jpeg", "png",
-            "gif", "bmp", "ico", "pdf", "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "mp3",
-            "mp4", "avi", "mov", "woff", "woff2", "ttf", "eot", "otf", "class", "pyc", "o",
-            "a", "lib", "obj",
+            "exe", "dll", "so", "dylib", "bin", "dat", "db", "sqlite", "jpg", "jpeg", "png", "gif",
+            "bmp", "ico", "pdf", "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "mp3", "mp4", "avi",
+            "mov", "woff", "woff2", "ttf", "eot", "otf", "class", "pyc", "o", "a", "lib", "obj",
         ];
 
         if let Some(ext) = path.extension() {
