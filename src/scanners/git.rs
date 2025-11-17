@@ -222,10 +222,12 @@ mod tests {
         index.write()?;
 
         let tree_id = index.write_tree()?;
-        let tree = repo.find_tree(tree_id)?;
         let sig = git2::Signature::now("Test", "test@example.com")?;
 
-        repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
+        {
+            let tree = repo.find_tree(tree_id)?;
+            repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
+        }
 
         Ok((temp_dir, repo))
     }
