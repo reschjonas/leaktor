@@ -97,7 +97,7 @@ impl GitScanner {
         Ok(findings)
     }
 
-    fn scan_diff(&self, repo: &Repository, diff: &Diff, commit: &Commit) -> Result<Vec<Finding>> {
+    fn scan_diff(&self, _repo: &Repository, diff: &Diff, commit: &Commit) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
         let detector = PatternDetector::new();
 

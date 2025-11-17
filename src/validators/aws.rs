@@ -20,7 +20,7 @@ impl AwsValidator {
 
     /// Validate AWS access key by attempting to call STS GetCallerIdentity
     #[allow(dead_code)]
-    async fn validate_access_key(&self, access_key: &str, secret_key: &str) -> Result<bool> {
+    async fn validate_access_key(&self, access_key: &str, _secret_key: &str) -> Result<bool> {
         // This is a simplified validation - in production you'd want to use
         // the AWS SDK and properly sign requests
 
