@@ -1,6 +1,6 @@
 [package]
 name = "leaktor"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Jonas Resch <reschjonas>"]
 description = "A blazingly fast secrets scanner with validation capabilities"
