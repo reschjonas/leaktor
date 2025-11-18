@@ -69,10 +69,10 @@ impl FilesystemScanner {
             }
 
             // Check file size
-            if let Ok(metadata) = fs::metadata(path)
-                && metadata.len() > self.max_file_size
-            {
-                continue;
+            if let Ok(metadata) = fs::metadata(path) {
+                if metadata.len() > self.max_file_size {
+                    continue;
+                }
             }
 
             // Skip binary files (basic check)
@@ -180,10 +180,10 @@ impl FilesystemScanner {
             "mov", "woff", "woff2", "ttf", "eot", "otf", "class", "pyc", "o", "a", "lib", "obj",
         ];
 
-        if let Some(ext) = path.extension()
-            && let Some(ext_str) = ext.to_str()
-        {
-            return binary_extensions.contains(&ext_str.to_lowercase().as_str());
+        if let Some(ext) = path.extension() {
+            if let Some(ext_str) = ext.to_str() {
+                return binary_extensions.contains(&ext_str.to_lowercase().as_str());
+            }
         }
 
         false

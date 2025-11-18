@@ -1,13 +1,24 @@
 [package]
 name = "leaktor"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["Jonas Resch <reschjonas>"]
 description = "A blazingly fast secrets scanner with validation capabilities"
 license = "MIT"
 repository = "https://github.com/reschjonas/leaktor"
+homepage = "https://github.com/reschjonas/leaktor"
+documentation = "https://github.com/reschjonas/leaktor#readme"
+readme = "README.md"
 keywords = ["security", "secrets", "scanner", "pentesting", "credentials"]
 categories = ["command-line-utilities", "development-tools"]
+rust-version = "1.70"
+exclude = [
+    ".github/",
+    ".git/",
+    "target/",
+    "*.md",
+    "!README.md",
+]
 
 [dependencies]
 # CLI

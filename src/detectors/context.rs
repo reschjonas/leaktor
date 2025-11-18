@@ -100,6 +100,13 @@ impl ContextAnalyzer {
             || path.contains("/target/")
             || path.contains("/build/")
             || path.contains("/dist/")
+            || path.starts_with("vendor/")
+            || path.starts_with("node_modules/")
+            || path.starts_with("third_party/")
+            || path.starts_with("external/")
+            || path.starts_with("target/")
+            || path.starts_with("build/")
+            || path.starts_with("dist/")
     }
 
     /// Build a context object from line information

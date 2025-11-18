@@ -260,10 +260,9 @@ impl PatternDetector {
         let mut secrets = Vec::new();
 
         for pattern in PATTERNS.iter() {
-            if let Some(captures) = pattern.regex.captures(line)
-                && let Some(matched) = captures.get(0)
-            {
-                let value = matched.as_str().to_string();
+            if let Some(captures) = pattern.regex.captures(line) {
+                if let Some(matched) = captures.get(0) {
+                    let value = matched.as_str().to_string();
 
                 // Calculate entropy
                 let entropy = crate::detectors::entropy::EntropyAnalyzer::calculate(&value);
@@ -283,6 +282,7 @@ impl PatternDetector {
                 );
 
                 secrets.push(secret);
+                }
             }
         }
 

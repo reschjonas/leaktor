@@ -21,82 +21,99 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Scan a directory or git repository for secrets
+    ///
+    /// Examples:
+    ///   leaktor scan                           # Scan current directory
+    ///   leaktor scan /path/to/project          # Scan specific directory
+    ///   leaktor scan --validate                # Scan and validate secrets
+    ///   leaktor scan --format html -o report.html  # Generate HTML report
     Scan {
         /// Path to scan (directory or git repository)
-        #[arg(default_value = ".")]
+        #[arg(default_value = ".", help = "Path to the directory to scan")]
         path: PathBuf,
 
-        /// Output format (console, json, sarif, html)
-        #[arg(short, long, default_value = "console")]
+        /// Output format: console (default), json, sarif, or html
+        #[arg(short, long, default_value = "console", help = "Output format (console|json|sarif|html)")]
         format: String,
 
-        /// Output file path
-        #[arg(short, long)]
+        /// Output file path (required for HTML, optional for others)
+        #[arg(short, long, help = "Write output to file instead of stdout")]
         output: Option<PathBuf>,
 
-        /// Scan git history
-        #[arg(long, default_value = "true")]
+        /// Scan git history for secrets in old commits
+        #[arg(long, default_value = "true", help = "Scan git history (true|false)")]
         git_history: bool,
 
-        /// Maximum git history depth
-        #[arg(long)]
+        /// Maximum git history depth to scan
+        #[arg(long, help = "Limit git history depth (e.g., 100)")]
         max_depth: Option<usize>,
 
-        /// Entropy threshold (default: 3.5)
-        #[arg(long, default_value = "3.5")]
+        /// Entropy threshold for detecting random strings
+        #[arg(long, default_value = "3.5", help = "Entropy threshold (higher = more random)")]
         entropy: f64,
 
-        /// Validate detected secrets
-        #[arg(short, long)]
+        /// Validate detected secrets against their APIs
+        #[arg(short, long, help = "Validate secrets are active (requires network)")]
         validate: bool,
 
-        /// Show verbose output
-        #[arg(short, long)]
+        /// Show verbose output with additional details
+        #[arg(short, long, help = "Show detailed information")]
         verbose: bool,
 
-        /// Show code context
-        #[arg(short, long, default_value = "true")]
+        /// Show code context around findings
+        #[arg(short, long, default_value = "true", help = "Show code context (true|false)")]
         context: bool,
 
-        /// Minimum confidence score (0.0 - 1.0)
-        #[arg(long, default_value = "0.6")]
+        /// Minimum confidence score (0.0 to 1.0) for findings
+        #[arg(long, default_value = "0.6", help = "Confidence threshold (0.0-1.0)")]
         min_confidence: f64,
 
-        /// Exclude test files
-        #[arg(long)]
+        /// Exclude test files from scan results
+        #[arg(long, help = "Skip test files")]
         exclude_tests: bool,
 
-        /// Exit with error code if secrets found
-        #[arg(long)]
+        /// Exit with error code 1 if any secrets found (useful for CI/CD)
+        #[arg(long, help = "Exit with error if secrets found (for CI/CD)")]
         fail_on_found: bool,
     },
 
-    /// Initialize a .leaktorignore file
+    /// Initialize a .leaktorignore file in the current directory
+    ///
+    /// The .leaktorignore file allows you to specify patterns for files
+    /// or content that should be ignored during scans.
     Init {
-        /// Output path for .leaktorignore
-        #[arg(default_value = ".leaktorignore")]
+        /// Output path for the ignore file
+        #[arg(default_value = ".leaktorignore", help = "Path for .leaktorignore file")]
         path: PathBuf,
     },
 
-    /// Generate a configuration file
+    /// Generate a configuration file with default settings
+    ///
+    /// Create a .leaktor.toml or .leaktor.yaml file to customize
+    /// scanning behavior, patterns, and thresholds.
     Config {
-        /// Output path for config file
-        #[arg(default_value = ".leaktor.toml")]
+        /// Output path for the configuration file
+        #[arg(default_value = ".leaktor.toml", help = "Path for config file")]
         path: PathBuf,
 
-        /// Format (toml or yaml)
-        #[arg(short, long, default_value = "toml")]
+        /// Configuration file format
+        #[arg(short, long, default_value = "toml", help = "Format (toml|yaml)")]
         format: String,
     },
 
-    /// Install pre-commit hook
+    /// Install a git pre-commit hook to scan before commits
+    ///
+    /// This creates a pre-commit hook that automatically scans for secrets
+    /// before each commit, preventing accidental secret commits.
     InstallHook {
-        /// Path to git repository
-        #[arg(default_value = ".")]
+        /// Path to the git repository
+        #[arg(default_value = ".", help = "Path to git repository")]
         path: PathBuf,
     },
 
-    /// List all supported secret types
+    /// List all supported secret types and patterns
+    ///
+    /// Display all secret types that Leaktor can detect, organized by category.
     List,
 }
 
@@ -167,6 +184,52 @@ async fn scan_command(
     exclude_tests: bool,
     fail_on_found: bool,
 ) -> Result<()> {
+    // Validate inputs
+    if !path.exists() {
+        anyhow::bail!(
+            "{} Path does not exist: {}\n{} Please provide a valid directory or file path.",
+            "Error:".red().bold(),
+            path.display(),
+            "Hint:".yellow().bold()
+        );
+    }
+
+    if !path.is_dir() {
+        anyhow::bail!(
+            "{} Path must be a directory: {}\n{} Leaktor scans directories, not individual files.",
+            "Error:".red().bold(),
+            path.display(),
+            "Hint:".yellow().bold()
+        );
+    }
+
+    if !["console", "json", "sarif", "html"].contains(&format.as_str()) {
+        anyhow::bail!(
+            "{} Invalid output format: {}\n{} Supported formats: console, json, sarif, html",
+            "Error:".red().bold(),
+            format.yellow(),
+            "Hint:".yellow().bold()
+        );
+    }
+
+    if !(0.0..=1.0).contains(&min_confidence) {
+        anyhow::bail!(
+            "{} Confidence must be between 0.0 and 1.0, got: {}\n{} Try a value like 0.6 (default) or 0.8 for higher precision.",
+            "Error:".red().bold(),
+            min_confidence,
+            "Hint:".yellow().bold()
+        );
+    }
+
+    if entropy < 0.0 {
+        anyhow::bail!(
+            "{} Entropy threshold cannot be negative: {}\n{} Try the default value of 3.5 or higher for more random strings.",
+            "Error:".red().bold(),
+            entropy,
+            "Hint:".yellow().bold()
+        );
+    }
+
     let start = Instant::now();
 
     // Load ignore manager
@@ -346,9 +409,23 @@ fn config_command(path: PathBuf, format: String) -> Result<()> {
 }
 
 fn install_hook_command(path: PathBuf) -> Result<()> {
+    if !path.exists() {
+        anyhow::bail!(
+            "{} Directory does not exist: {}\n{} Provide a path to a git repository.",
+            "Error:".red().bold(),
+            path.display(),
+            "Hint:".yellow().bold()
+        );
+    }
+
     let git_dir = path.join(".git");
     if !git_dir.exists() {
-        anyhow::bail!("Not a git repository: {}", path.display());
+        anyhow::bail!(
+            "{} Not a git repository: {}\n{} Run 'git init' first or provide a path to an existing git repository.",
+            "Error:".red().bold(),
+            path.display(),
+            "Hint:".yellow().bold()
+        );
     }
 
     let hooks_dir = git_dir.join("hooks");

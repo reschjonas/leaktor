@@ -104,7 +104,9 @@ mod tests {
 
     #[test]
     fn test_is_high_entropy() {
-        assert!(EntropyAnalyzer::is_high_entropy("Xy9#mK2@qL5&", 4.0));
+        // Test with realistic threshold (3.5 is default in config)
+        assert!(EntropyAnalyzer::is_high_entropy("Xy9#mK2@qL5&", 3.5));
+        assert!(EntropyAnalyzer::is_high_entropy("aB3$xY9#mK2@qL5&pN7!", 4.0));
         assert!(!EntropyAnalyzer::is_high_entropy("password", 4.0));
     }
 

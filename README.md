@@ -28,55 +28,231 @@ Leaktor is a modern, high-performance secrets scanner designed for security prof
 
 ##  Installation
 
-### From Source (Current)
+### Quick Install (Recommended)
 
+**Using Cargo** (All Platforms)
 ```bash
+cargo install leaktor
+```
+
+### Platform-Specific Installation
+
+<details>
+<summary><b>🪟 Windows</b></summary>
+
+#### Option 1: Using Cargo (Recommended)
+```powershell
+# Install Rust from https://rustup.rs if not already installed
+cargo install leaktor
+```
+
+#### Option 2: Using Scoop
+```powershell
+scoop bucket add leaktor https://github.com/reschjonas/scoop-leaktor
+scoop install leaktor
+```
+
+#### Option 3: Download Pre-built Binary
+1. Download the latest Windows binary from [Releases](https://github.com/reschjonas/leaktor/releases)
+2. Extract `leaktor.exe` to a directory in your PATH (e.g., `C:\Program Files\leaktor\`)
+3. Add the directory to your PATH environment variable
+
+#### Option 4: Build from Source
+```powershell
+# Requires Rust and Git
+git clone https://github.com/reschjonas/leaktor
+cd leaktor
+cargo build --release
+# Binary will be at .\target\release\leaktor.exe
+# Move it to a directory in your PATH or add target\release to PATH
+```
+
+**Verify Installation:**
+```powershell
+leaktor --version
+```
+
+</details>
+
+<details>
+<summary><b>🍎 macOS</b></summary>
+
+#### Option 1: Using Homebrew (Recommended)
+```bash
+brew tap reschjonas/tap
+brew install leaktor
+```
+
+#### Option 2: Using Cargo
+```bash
+# Install Rust from https://rustup.rs if not already installed
+cargo install leaktor
+```
+
+#### Option 3: Download Pre-built Binary
+```bash
+# Download and install
+curl -L https://github.com/reschjonas/leaktor/releases/latest/download/leaktor-macos.tar.gz | tar xz
+sudo mv leaktor /usr/local/bin/
+```
+
+#### Option 4: Build from Source
+```bash
+# Install Rust and Git if not already installed
 git clone https://github.com/reschjonas/leaktor
 cd leaktor
 cargo build --release
 sudo cp target/release/leaktor /usr/local/bin/
 ```
 
-### Using Cargo (Future)
+**Verify Installation:**
+```bash
+leaktor --version
+```
+
+</details>
+
+<details>
+<summary><b>🐧 Linux</b></summary>
+
+#### Option 1: Using Cargo (Recommended)
+```bash
+# Install Rust from https://rustup.rs if not already installed
+cargo install leaktor
+```
+
+#### Option 2: Download Pre-built Binary
+```bash
+# For x86_64
+curl -L https://github.com/reschjonas/leaktor/releases/latest/download/leaktor-linux-x86_64.tar.gz | tar xz
+sudo mv leaktor /usr/local/bin/
+
+# For ARM64
+curl -L https://github.com/reschjonas/leaktor/releases/latest/download/leaktor-linux-aarch64.tar.gz | tar xz
+sudo mv leaktor /usr/local/bin/
+```
+
+#### Option 3: Build from Source
+```bash
+# Install Rust and Git if not already installed
+# Debian/Ubuntu:
+sudo apt install build-essential git pkg-config libssl-dev
+# Fedora/RHEL:
+sudo dnf install gcc git pkg-config openssl-devel
+# Arch:
+sudo pacman -S base-devel git openssl
+
+# Build and install
+git clone https://github.com/reschjonas/leaktor
+cd leaktor
+cargo build --release
+sudo cp target/release/leaktor /usr/local/bin/
+```
+
+**Verify Installation:**
+```bash
+leaktor --version
+```
+
+</details>
+
+###  Install from Source (Development)
+
+For contributors or those who want the latest development version:
 
 ```bash
-cargo install leaktor
+git clone https://github.com/reschjonas/leaktor
+cd leaktor
+cargo build --release
+
+# The binary will be at target/release/leaktor
+# You can run it directly or copy to your PATH
+./target/release/leaktor --version
 ```
 
 ##  Quick Start
 
-### Basic Usage
+### 1️⃣ Basic Scanning
 
-Scan current directory:
+**Scan your current project:**
 ```bash
 leaktor scan
 ```
 
-Scan a specific directory:
+**Scan a specific directory:**
 ```bash
 leaktor scan /path/to/project
 ```
 
-Scan with validation (checks if secrets are active):
+**Scan and validate secrets** (checks if they're actually active):
 ```bash
 leaktor scan --validate
 ```
 
-### Output Formats
+### 2️⃣ Generate Reports
 
-JSON output:
+**Console output** (default - colored, formatted):
+```bash
+leaktor scan
+```
+
+**JSON report** (for programmatic processing):
 ```bash
 leaktor scan --format json --output results.json
 ```
 
-SARIF output for CI/CD:
+**HTML report** (beautiful, interactive web report):
+```bash
+leaktor scan --format html --output report.html
+# Open report.html in your browser
+```
+
+**SARIF report** (for GitHub Security tab, IDEs):
 ```bash
 leaktor scan --format sarif --output results.sarif
 ```
 
-HTML report:
+### 3️⃣ Set Up Protection
+
+**Create an ignore file** (exclude false positives):
 ```bash
-leaktor scan --format html --output report.html
+leaktor init
+# Edit .leaktorignore to add patterns
+```
+
+**Install pre-commit hook** (prevent secret commits):
+```bash
+leaktor install-hook
+# Hook will run automatically before each commit
+```
+
+**Generate config file** (customize behavior):
+```bash
+leaktor config
+# Edit .leaktor.toml to adjust settings
+```
+
+### 4️⃣ Common Use Cases
+
+**Scan before pushing to remote:**
+```bash
+leaktor scan --fail-on-found
+# Exits with code 1 if secrets found - great for CI/CD
+```
+
+**Scan only working directory** (skip git history):
+```bash
+leaktor scan --git-history=false
+```
+
+**High-security scan** (strict settings):
+```bash
+leaktor scan --min-confidence 0.9 --entropy 4.0 --validate
+```
+
+**Quick scan** (exclude tests, higher confidence):
+```bash
+leaktor scan --exclude-tests --min-confidence 0.8
 ```
 
 ### Advanced Options

@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Types of secrets that can be detected
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecretType {
     // Cloud Provider Credentials
     AwsAccessKey,
@@ -60,6 +60,68 @@ pub enum SecretType {
 
     // Custom
     Custom(String),
+}
+
+impl Serialize for SecretType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for SecretType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "AWS Access Key" => Ok(SecretType::AwsAccessKey),
+            "AWS Secret Key" => Ok(SecretType::AwsSecretKey),
+            "AWS Session Token" => Ok(SecretType::AwsSessionToken),
+            "AWS MWS Key" => Ok(SecretType::AwsMwsKey),
+            "GCP API Key" => Ok(SecretType::GcpApiKey),
+            "GCP Service Account" => Ok(SecretType::GcpServiceAccount),
+            "Azure Storage Key" => Ok(SecretType::AzureStorageKey),
+            "Azure Connection String" => Ok(SecretType::AzureConnectionString),
+            "Azure Client Secret" => Ok(SecretType::AzureClientSecret),
+            "GitHub Token" => Ok(SecretType::GitHubToken),
+            "GitHub Personal Access Token" => Ok(SecretType::GitHubPat),
+            "GitHub OAuth Token" => Ok(SecretType::GitHubOauth),
+            "GitLab Token" => Ok(SecretType::GitLabToken),
+            "GitLab Personal Access Token" => Ok(SecretType::GitLabPat),
+            "Bitbucket Token" => Ok(SecretType::BitbucketToken),
+            "Stripe API Key" => Ok(SecretType::StripeApiKey),
+            "Stripe Restricted Key" => Ok(SecretType::StripeRestrictedKey),
+            "SendGrid API Key" => Ok(SecretType::SendGridApiKey),
+            "Twilio API Key" => Ok(SecretType::TwilioApiKey),
+            "Slack Token" => Ok(SecretType::SlackToken),
+            "Slack Webhook" => Ok(SecretType::SlackWebhook),
+            "Mailgun API Key" => Ok(SecretType::MailgunApiKey),
+            "Mailchimp API Key" => Ok(SecretType::MailchimpApiKey),
+            "Heroku API Key" => Ok(SecretType::HerokuApiKey),
+            "Database URL" => Ok(SecretType::DatabaseUrl),
+            "MongoDB Connection String" => Ok(SecretType::MongoDbConnectionString),
+            "PostgreSQL Connection String" => Ok(SecretType::PostgresConnectionString),
+            "MySQL Connection String" => Ok(SecretType::MysqlConnectionString),
+            "Redis Connection String" => Ok(SecretType::RedisConnectionString),
+            "RSA Private Key" => Ok(SecretType::RsaPrivateKey),
+            "SSH Private Key" => Ok(SecretType::SshPrivateKey),
+            "PGP Private Key" => Ok(SecretType::PgpPrivateKey),
+            "EC Private Key" => Ok(SecretType::EcPrivateKey),
+            "OpenSSL Private Key" => Ok(SecretType::OpensslPrivateKey),
+            "JWT Token" => Ok(SecretType::JwtToken),
+            "OAuth Token" => Ok(SecretType::OAuthToken),
+            "Generic API Key" => Ok(SecretType::GenericApiKey),
+            "Generic Secret" => Ok(SecretType::GenericSecret),
+            "Password in URL" => Ok(SecretType::PasswordInUrl),
+            "Generic Credential" => Ok(SecretType::GenericCredential),
+            "High Entropy String" => Ok(SecretType::HighEntropyString),
+            custom => Ok(SecretType::Custom(custom.to_string())),
+        }
+    }
 }
 
 impl SecretType {

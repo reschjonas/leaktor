@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>leaktor</id>
+    <version>0.1.0</version>
+    <packageSourceUrl>https://github.com/reschjonas/leaktor</packageSourceUrl>
+    <owners>Jonas Resch</owners>
+    <title>Leaktor</title>
+    <authors>Jonas Resch</authors>
+    <projectUrl>https://github.com/reschjonas/leaktor</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/reschjonas/leaktor/master/assets/icon.png</iconUrl>
+    <copyright>2025 Jonas Resch</copyright>
+    <licenseUrl>https://github.com/reschjonas/leaktor/blob/master/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/reschjonas/leaktor</projectSourceUrl>
+    <docsUrl>https://github.com/reschjonas/leaktor#readme</docsUrl>
+    <bugTrackerUrl>https://github.com/reschjonas/leaktor/issues</bugTrackerUrl>
+    <tags>security secrets scanner pentesting credentials cli</tags>
+    <summary>A blazingly fast secrets scanner with validation capabilities</summary>
+    <description>
+Leaktor is a modern, high-performance secrets scanner designed for security professionals and developers. Built in Rust, it combines pattern matching, entropy analysis, and live secret validation to help you find and verify exposed credentials in your codebase and git history.
+
+## Features
+- Detects 40+ types of secrets including AWS keys, GitHub tokens, API keys, private keys, and database credentials
+- High accuracy with regex patterns and entropy analysis
+- Blazingly fast with parallel scanning
+- Secret validation for AWS and GitHub credentials
+- Git history scanning
+- Multiple output formats (console, JSON, SARIF, HTML)
+- Pre-commit hooks
+- Custom patterns support
+    </description>
+    <releaseNotes>https://github.com/reschjonas/leaktor/blob/master/CHANGELOG.md</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
