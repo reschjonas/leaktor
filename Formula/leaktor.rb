@@ -1,8 +1,8 @@
 class Leaktor < Formula
   desc "Blazingly fast secrets scanner with validation capabilities"
   homepage "https://github.com/reschjonas/leaktor"
-  url "https://github.com/reschjonas/leaktor/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "" # Will be filled automatically on release
+  url "https://github.com/reschjonas/leaktor/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "dae5b9398df97e7decb5f0d9e6ff4f03fd3cc8e6ba75e86609ce7d9142907e45"
   license "MIT"
   head "https://github.com/reschjonas/leaktor.git", branch: "master"
 

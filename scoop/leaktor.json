@@ -1,18 +1,18 @@
 {
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "A blazingly fast secrets scanner with validation capabilities",
     "homepage": "https://github.com/reschjonas/leaktor",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/reschjonas/leaktor/releases/download/v0.1.0/leaktor-windows-amd64.exe",
+            "url": "https://github.com/reschjonas/leaktor/releases/download/v0.1.1/leaktor-windows-amd64.exe",
             "bin": [
                 [
                     "leaktor-windows-amd64.exe",
                     "leaktor"
                 ]
             ],
-            "hash": ""
+            "hash": "a3c53456e0c786695182fdcd6e495880cd51f1b74e3ce0c6f51a53184f479ce2"
         }
     },
     "checkver": {
