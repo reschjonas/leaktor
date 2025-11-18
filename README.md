@@ -2,12 +2,7 @@
 
 **A blazingly fast secrets scanner with validation capabilities**
 
-[![Crates.io](https://img.shields.io/crates/v/leaktor.svg)](https://crates.io/crates/leaktor)
-[![Downloads](https://img.shields.io/crates/d/leaktor.svg)](https://crates.io/crates/leaktor)
-[![GitHub Release](https://img.shields.io/github/v/release/reschjonas/leaktor)](https://github.com/reschjonas/leaktor/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/rust-2021%20edition-orange.svg)](https://www.rust-lang.org)
-[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey.svg)](https://github.com/reschjonas/leaktor)
+[![Crates.io](https://img.shields.io/crates/v/leaktor.svg)](https://crates.io/crates/leaktor) [![Downloads](https://img.shields.io/crates/d/leaktor.svg)](https://crates.io/crates/leaktor) [![GitHub Release](https://img.shields.io/github/v/release/reschjonas/leaktor)](https://github.com/reschjonas/leaktor/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Rust](https://img.shields.io/badge/rust-2021%20edition-orange.svg)](https://www.rust-lang.org) [![Platform](https://img.shields.io/badge/platform-linux%20|%20macos%20|%20windows-lightgrey.svg)](https://github.com/reschjonas/leaktor)
 
 ---
 
