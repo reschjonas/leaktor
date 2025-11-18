@@ -109,7 +109,13 @@ jobs:
         targets: ${{ matrix.target }}
 
     - name: Build release binary
-      run: cargo build --release --target ${{ matrix.target }}
+      run: |
+        if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ] || [ "${{ matrix.target }}" = "aarch64-apple-darwin" ]; then
+          cargo build --release --target ${{ matrix.target }} --features vendored-openssl
+        else
+          cargo build --release --target ${{ matrix.target }}
+        fi
+      shell: bash
 
     - name: Strip binary (Linux/macOS)
       if: matrix.os != 'windows-latest'
