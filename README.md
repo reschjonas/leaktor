@@ -2,35 +2,79 @@
 
 **A blazingly fast secrets scanner with validation capabilities**
 
+[![Crates.io](https://img.shields.io/crates/v/leaktor.svg)](https://crates.io/crates/leaktor)
+[![Downloads](https://img.shields.io/crates/d/leaktor.svg)](https://crates.io/crates/leaktor)
+[![GitHub Release](https://img.shields.io/github/v/release/reschjonas/leaktor)](https://github.com/reschjonas/leaktor/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-2021%20edition-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey.svg)](https://github.com/reschjonas/leaktor)
 
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+  - [Quick Install](#quick-install-recommended)
+  - [Platform-Specific](#platform-specific-installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [CI/CD Integration](#cicd-integration)
+- [Supported Secrets](#supported-secrets)
+- [How It Works](#how-it-works)
+- [Output Formats](#output-formats)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Overview
+
 Leaktor is a modern, high-performance secrets scanner designed for security professionals and developers. Built in Rust, it combines pattern matching, entropy analysis, and live secret validation to help you find and verify exposed credentials in your codebase and git history.
 
-##  Features
+### Key Highlights
 
-### Core Capabilities
--  **Comprehensive Secret Detection** - Detects 40+ types of secrets including AWS keys, GitHub tokens, API keys, private keys, and database credentials
--  **High Accuracy** - Combines regex patterns with entropy analysis to minimize false positives
--  **Blazingly Fast** - Written in Rust with parallel scanning for maximum performance
--  **Secret Validation** - Validates AWS and GitHub credentials to confirm if they're active (optin)
--  **Context-Aware** - Understands test files, documentation, and comments to reduce noise
--  **Git History Scanning** - Scans entire git history to find secrets in old commits
+| Feature | Description |
+|---------|-------------|
+| **40+ Secret Types** | AWS, GitHub, Azure, private keys, database credentials, and more |
+| **Validation Support** | Verify if AWS and GitHub secrets are actually active |
+| **Git History Scanning** | Find secrets in your entire commit history |
+| **Multiple Outputs** | Console, JSON, SARIF, and interactive HTML reports |
+| **High Performance** | Parallel scanning with Rust's speed |
+| **CI/CD Ready** | SARIF output for GitHub Security, fail-on-found flag |
+
+---
+
+## Features
+
+### Detection Capabilities
+
+- **Comprehensive Pattern Matching** - Regex patterns for 40+ secret types
+- **Entropy Analysis** - Shannon entropy calculation to detect random strings and API keys
+- **Context-Aware Filtering** - Understands test files, documentation, and comments to reduce false positives
+- **Git History Scanning** - Scans entire commit history, not just current files
+- **Secret Validation** - Optional live validation for AWS and GitHub credentials
+- **Custom Patterns** - Add your own regex patterns for company-specific secrets
 
 ### Developer Experience
--  **Beautiful Console Output** - Colored, formatted output with severity indicators
--  **Multiple Output Formats** - JSON, SARIF (for CI/CD), HTML reports, and console
--  **Flexible Configuration** - YAML/TOML config files with sensible defaults
--  **Smart Ignoring** - `.leaktorignore` file and inline `// leaktor:ignore` comments
--  **Pre-commit Hooks** - Prevent secrets from being committed
--  **Custom Patterns** - Add your own regex patterns for company-specific secrets
 
-##  Installation
+- **Beautiful Console Output** - Color-coded, formatted output with severity indicators
+- **Multiple Output Formats** - Console, JSON, SARIF (for CI/CD), and interactive HTML reports
+- **Flexible Configuration** - YAML/TOML config files with sensible defaults
+- **Smart Ignoring** - `.leaktorignore` file and inline `// leaktor:ignore` comments
+- **Pre-commit Hooks** - Prevent secrets from being committed
+- **Fast Performance** - Parallel scanning with minimal resource usage
+
+---
+
+## Installation
 
 ### Quick Install (Recommended)
 
-**Using Cargo** (All Platforms)
+Using Cargo (all platforms):
+
 ```bash
 cargo install leaktor
 ```
@@ -38,108 +82,103 @@ cargo install leaktor
 ### Platform-Specific Installation
 
 <details>
-<summary><b>🪟 Windows</b></summary>
+<summary><b>Windows</b></summary>
 
-#### Option 1: Using Cargo (Recommended)
-```powershell
-# Install Rust from https://rustup.rs if not already installed
-cargo install leaktor
-```
+#### Using Scoop
 
-#### Option 2: Using Scoop
 ```powershell
 scoop bucket add leaktor https://github.com/reschjonas/scoop-leaktor
 scoop install leaktor
 ```
 
-#### Option 3: Download Pre-built Binary
-1. Download the latest Windows binary from [Releases](https://github.com/reschjonas/leaktor/releases)
-2. Extract `leaktor.exe` to a directory in your PATH (e.g., `C:\Program Files\leaktor\`)
-3. Add the directory to your PATH environment variable
+#### Using Cargo
 
-#### Option 4: Build from Source
 ```powershell
-# Requires Rust and Git
+cargo install leaktor
+```
+
+#### Pre-built Binary
+
+1. Download from [Releases](https://github.com/reschjonas/leaktor/releases)
+2. Extract `leaktor.exe` to a directory in your PATH
+3. Verify: `leaktor --version`
+
+#### Build from Source
+
+```powershell
 git clone https://github.com/reschjonas/leaktor
 cd leaktor
 cargo build --release
-# Binary will be at .\target\release\leaktor.exe
-# Move it to a directory in your PATH or add target\release to PATH
-```
-
-**Verify Installation:**
-```powershell
-leaktor --version
+# Binary at: .\target\release\leaktor.exe
 ```
 
 </details>
 
 <details>
-<summary><b>🍎 macOS</b></summary>
+<summary><b>macOS</b></summary>
 
-#### Option 1: Using Homebrew (Recommended)
+#### Using Homebrew
+
 ```bash
 brew tap reschjonas/tap
 brew install leaktor
 ```
 
-#### Option 2: Using Cargo
+#### Using Cargo
+
 ```bash
-# Install Rust from https://rustup.rs if not already installed
 cargo install leaktor
 ```
 
-#### Option 3: Download Pre-built Binary
+#### Pre-built Binary
+
 ```bash
-# Download and install
 curl -L https://github.com/reschjonas/leaktor/releases/latest/download/leaktor-macos.tar.gz | tar xz
 sudo mv leaktor /usr/local/bin/
 ```
 
-#### Option 4: Build from Source
+#### Build from Source
+
 ```bash
-# Install Rust and Git if not already installed
 git clone https://github.com/reschjonas/leaktor
 cd leaktor
 cargo build --release
 sudo cp target/release/leaktor /usr/local/bin/
 ```
 
-**Verify Installation:**
-```bash
-leaktor --version
-```
-
 </details>
 
 <details>
-<summary><b>🐧 Linux</b></summary>
+<summary><b>Linux</b></summary>
 
-#### Option 1: Using Cargo (Recommended)
+#### Using Cargo
+
 ```bash
-# Install Rust from https://rustup.rs if not already installed
 cargo install leaktor
 ```
 
-#### Option 2: Download Pre-built Binary
+#### Pre-built Binary
+
 ```bash
-# For x86_64
-curl -L https://github.com/reschjonas/leaktor/releases/latest/download/leaktor-linux-x86_64.tar.gz | tar xz
+# x86_64
+curl -L https://github.com/reschjonas/leaktor/releases/latest/download/leaktor-linux-amd64.tar.gz | tar xz
 sudo mv leaktor /usr/local/bin/
 
-# For ARM64
+# ARM64
 curl -L https://github.com/reschjonas/leaktor/releases/latest/download/leaktor-linux-aarch64.tar.gz | tar xz
 sudo mv leaktor /usr/local/bin/
 ```
 
-#### Option 3: Build from Source
+#### Build from Source
+
 ```bash
-# Install Rust and Git if not already installed
-# Debian/Ubuntu:
+# Install dependencies (Debian/Ubuntu)
 sudo apt install build-essential git pkg-config libssl-dev
-# Fedora/RHEL:
+
+# Fedora/RHEL
 sudo dnf install gcc git pkg-config openssl-devel
-# Arch:
+
+# Arch
 sudo pacman -S base-devel git openssl
 
 # Build and install
@@ -149,177 +188,75 @@ cargo build --release
 sudo cp target/release/leaktor /usr/local/bin/
 ```
 
-**Verify Installation:**
-```bash
-leaktor --version
-```
-
 </details>
 
-###  Install from Source (Development)
+---
 
-For contributors or those who want the latest development version:
+## Quick Start
+
+### Basic Usage
 
 ```bash
-git clone https://github.com/reschjonas/leaktor
-cd leaktor
-cargo build --release
-
-# The binary will be at target/release/leaktor
-# You can run it directly or copy to your PATH
-./target/release/leaktor --version
-```
-
-##  Quick Start
-
-### 1️⃣ Basic Scanning
-
-**Scan your current project:**
-```bash
+# Scan current directory
 leaktor scan
-```
 
-**Scan a specific directory:**
-```bash
+# Scan specific directory
 leaktor scan /path/to/project
-```
 
-**Scan and validate secrets** (checks if they're actually active):
-```bash
+# Scan and validate secrets
 leaktor scan --validate
-```
 
-### 2️⃣ Generate Reports
-
-**Console output** (default - colored, formatted):
-```bash
-leaktor scan
-```
-
-**JSON report** (for programmatic processing):
-```bash
-leaktor scan --format json --output results.json
-```
-
-**HTML report** (beautiful, interactive web report):
-```bash
+# Generate HTML report
 leaktor scan --format html --output report.html
-# Open report.html in your browser
 ```
 
-**SARIF report** (for GitHub Security tab, IDEs):
+### Common Commands
+
+| Command | Description |
+|---------|-------------|
+| `leaktor scan` | Scan current directory |
+| `leaktor init` | Create `.leaktorignore` file |
+| `leaktor config` | Generate `.leaktor.toml` config |
+| `leaktor install-hook` | Install pre-commit hook |
+| `leaktor list` | Show all supported secret types |
+
+---
+
+## Usage
+
+### Scanning Options
+
 ```bash
+# Basic scan
+leaktor scan
+
+# Scan with validation (checks if secrets are active)
+leaktor scan --validate
+
+# Output formats
+leaktor scan --format json --output results.json
 leaktor scan --format sarif --output results.sarif
+leaktor scan --format html --output report.html
+
+# Advanced options
+leaktor scan --git-history=false           # Skip git history
+leaktor scan --max-depth 100                # Limit git history depth
+leaktor scan --entropy 4.0                  # Adjust entropy threshold
+leaktor scan --min-confidence 0.8           # Set confidence threshold
+leaktor scan --exclude-tests                # Skip test files
+leaktor scan --fail-on-found                # Exit code 1 if secrets found (CI/CD)
 ```
 
-### 3️⃣ Set Up Protection
+### Configuration File
 
-**Create an ignore file** (exclude false positives):
-```bash
-leaktor init
-# Edit .leaktorignore to add patterns
-```
+Generate a configuration file:
 
-**Install pre-commit hook** (prevent secret commits):
-```bash
-leaktor install-hook
-# Hook will run automatically before each commit
-```
-
-**Generate config file** (customize behavior):
-```bash
-leaktor config
-# Edit .leaktor.toml to adjust settings
-```
-
-### 4️⃣ Common Use Cases
-
-**Scan before pushing to remote:**
-```bash
-leaktor scan --fail-on-found
-# Exits with code 1 if secrets found - great for CI/CD
-```
-
-**Scan only working directory** (skip git history):
-```bash
-leaktor scan --git-history=false
-```
-
-**High-security scan** (strict settings):
-```bash
-leaktor scan --min-confidence 0.9 --entropy 4.0 --validate
-```
-
-**Quick scan** (exclude tests, higher confidence):
-```bash
-leaktor scan --exclude-tests --min-confidence 0.8
-```
-
-### Advanced Options
-
-```bash
-# Scan only working directory (skip git history)
-leaktor scan --git-history false
-
-# Limit git history depth
-leaktor scan --max-depth 100
-
-# Adjust entropy threshold (default: 3.5)
-leaktor scan --entropy 4.0
-
-# Minimum confidence score (0.0 - 1.0)
-leaktor scan --min-confidence 0.8
-
-# Exclude test files
-leaktor scan --exclude-tests
-
-# Fail with exit code 1 if secrets found (useful for CI/CD)
-leaktor scan --fail-on-found
-```
-
-##  Usage Examples
-
-### Initialize Ignore File
-
-Create a `.leaktorignore` file:
-```bash
-leaktor init
-```
-
-Example `.leaktorignore`:
-```
-# Ignore test files
-*.test.js
-*_test.go
-tests/*
-
-# Ignore dependencies
-node_modules/*
-vendor/*
-
-# Ignore specific files
-config/example.env
-```
-
-### Inline Ignoring
-
-Add inline comments to ignore specific lines:
-```python
-# This will be ignored
-API_KEY = "test_key_1234567890"  # leaktor:ignore
-
-# This will be detected
-PROD_API_KEY = "live_key_abcdefgh"
-```
-
-### Create Configuration File
-
-Generate a config file:
 ```bash
 leaktor config
 ```
 
 Example `.leaktor.toml`:
+
 ```toml
 entropy_threshold = 3.5
 min_confidence = 0.6
@@ -339,79 +276,241 @@ severity = "HIGH"
 confidence = 0.85
 ```
 
-### Install Pre-commit Hook
+### Ignore Patterns
 
-Automatically scan before each commit:
+Create a `.leaktorignore` file:
+
+```bash
+leaktor init
+```
+
+Example patterns:
+
+```
+# Ignore test files
+*.test.js
+*_test.go
+tests/*
+
+# Ignore dependencies
+node_modules/*
+vendor/*
+
+# Ignore specific files
+config/example.env
+```
+
+**Inline ignoring:**
+
+```python
+API_KEY = "test_key_1234567890"  # leaktor:ignore
+```
+
+### Pre-commit Hook
+
+Install a git hook to prevent committing secrets:
+
 ```bash
 leaktor install-hook
 ```
 
-This creates a pre-commit hook that prevents commits containing secrets.
+This will automatically scan before each commit. Bypass with:
 
-### List Supported Secret Types
-
-See all detectable secret types:
 ```bash
-leaktor list
+git commit --no-verify
 ```
 
-##  What Secrets Does Leaktor Detect?
+---
 
-### Cloud Provider Credentials
-- AWS Access Keys, Secret Keys, Session Tokens
-- Google Cloud API Keys, Service Accounts
-- Azure Storage Keys, Connection Strings, Client Secrets
+## Configuration
 
-### Version Control Platforms
-- GitHub Personal Access Tokens, OAuth Tokens
-- GitLab Personal Access Tokens
-- Bitbucket Tokens
+### Configuration Files
 
-### API Keys & Services
-- Stripe API Keys
-- SendGrid API Keys
-- Twilio API Keys
-- Slack Tokens & Webhooks
-- Mailgun, Mailchimp, Heroku API Keys
+Leaktor supports configuration files in TOML or YAML format:
+
+- `.leaktor.toml` (recommended)
+- `.leaktor.yaml`
+- `.leaktor.yml`
+
+Place in your project root for automatic loading.
+
+### Command-Line Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--git-history` | `true` | Scan git commit history |
+| `--max-depth` | unlimited | Maximum git history depth |
+| `--entropy` | `3.5` | Entropy threshold for random strings |
+| `--min-confidence` | `0.6` | Minimum confidence score (0.0-1.0) |
+| `--validate` | `false` | Validate secrets against APIs |
+| `--exclude-tests` | `false` | Exclude test files from scan |
+| `--fail-on-found` | `false` | Exit with code 1 if secrets found |
+
+---
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: Security Scan
+
+on: [push, pull_request]
+
+jobs:
+  leaktor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full git history
+
+      - name: Install Leaktor
+        run: cargo install leaktor
+
+      - name: Scan for secrets
+        run: leaktor scan --format sarif --output results.sarif --fail-on-found
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: results.sarif
+```
+
+### GitLab CI
+
+```yaml
+secrets-scan:
+  image: rust:latest
+  script:
+    - cargo install leaktor
+    - leaktor scan --format json --output results.json --fail-on-found
+  artifacts:
+    reports:
+      sast: results.json
+```
+
+### Jenkins Pipeline
+
+```groovy
+pipeline {
+    agent any
+    stages {
+        stage('Scan Secrets') {
+            steps {
+                sh 'cargo install leaktor'
+                sh 'leaktor scan --fail-on-found'
+            }
+        }
+    }
+}
+```
+
+---
+
+## Supported Secrets
+
+### Cloud Providers
+
+- **AWS** - Access Keys, Secret Keys, Session Tokens, MWS Keys
+- **Google Cloud** - API Keys, Service Account credentials
+- **Azure** - Storage Keys, Connection Strings, Client Secrets
+
+### Version Control
+
+- **GitHub** - Personal Access Tokens, OAuth Tokens
+- **GitLab** - Personal Access Tokens
+- **Bitbucket** - API Tokens
+
+### Services & APIs
+
+- **Stripe** - API Keys, Restricted Keys
+- **SendGrid** - API Keys
+- **Twilio** - API Keys, Auth Tokens
+- **Slack** - Tokens, Webhooks
+- **Heroku** - API Keys
+- **Mailgun** - API Keys
+- **Mailchimp** - API Keys
 
 ### Private Keys
-- RSA Private Keys
-- SSH Private Keys
-- PGP Private Keys
-- EC Private Keys
-- OpenSSL Private Keys
+
+- **RSA** - Private Keys
+- **SSH** - Private Keys
+- **PGP** - Private Keys
+- **EC** - Elliptic Curve Private Keys
+- **OpenSSL** - Private Keys
 
 ### Databases
-- MongoDB Connection Strings
-- PostgreSQL Connection Strings
-- MySQL Connection Strings
-- Redis Connection Strings
+
+- **MongoDB** - Connection Strings
+- **PostgreSQL** - Connection Strings
+- **MySQL** - Connection Strings
+- **Redis** - Connection Strings
 
 ### Other
-- JWT Tokens
-- OAuth Tokens
-- Generic API Keys
-- Passwords in URLs
-- High-Entropy Strings
 
-##  How It Works
+- **JWT** - JSON Web Tokens
+- **OAuth** - OAuth Tokens
+- **Generic API Keys** - Pattern-based detection
+- **Passwords in URLs** - HTTP/HTTPS URLs with credentials
+- **High-Entropy Strings** - Random-looking strings
 
-Leaktor uses a multi-layered approach to detect secrets:
+---
 
-1. **Pattern Matching** - Regex patterns for known secret formats
-2. **Entropy Analysis** - Shannon entropy calculation to detect random strings
-3. **Context Analysis** - Understands file types and code context
-4. **Validation** (Optional) - Tests if secrets are active using their respective APIs
+## How It Works
 
-### Detection Flow
+Leaktor uses a multi-layered detection approach:
 
 ```
-File → Pattern Match → Entropy Check → Context Analysis → Severity Scoring → Validation (opt-in) → Report
+┌─────────────┐
+│    File     │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────┐
+│  Pattern Matching   │  ← Regex patterns for known secret formats
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Entropy Analysis   │  ← Shannon entropy to detect random strings
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Context Analysis   │  ← Understand file type, location, comments
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Severity Scoring   │  ← Assign criticality level
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Validation (opt)   │  ← Test if secrets are active
+└──────────┬──────────┘
+           │
+           ▼
+      ┌────────┐
+      │ Report │
+      └────────┘
 ```
 
-##  Output Examples
+### Detection Methodology
 
-### Console Output
+1. **Pattern Matching** - Regex patterns for known secret formats (AWS keys, GitHub tokens, etc.)
+2. **Entropy Analysis** - Shannon entropy calculation to identify high-randomness strings
+3. **Context Analysis** - Examines file type, path, and surrounding code to reduce false positives
+4. **Validation** (Optional) - Makes API calls to verify if credentials are active
+
+---
+
+## Output Formats
+
+### Console (Default)
+
+Colored, formatted output with severity indicators:
 
 ```
 ╔═══════════════════════════════════════════════╗
@@ -436,125 +535,105 @@ Findings
   Confidence: 95%
   Entropy: 4.32
   Context:
-    const AWS_KEY = process.env.AWS_ACCESS_KEY;
-    AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE  // Found here
-    AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG
-
-═════════════════════════════════════════════════
-⚠ Scan complete. 3 secrets detected.
-═════════════════════════════════════════════════
+    AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
 ```
 
-### HTML Report
+### JSON
 
-Leaktor generates beautiful, self-contained HTML reports with:
-- Summary statistics
-- Severity breakdown
-- Color-coded findings
-- Code context
-- Validation status
-- Dark theme for easy reading
+Structured output for programmatic processing:
 
-##  Integration
-
-### CI/CD Integration
-
-#### GitHub Actions
-
-```yaml
-name: Security Scan
-
-on: [push, pull_request]
-
-jobs:
-  leaktor:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Full git history
-
-      - name: Install Leaktor
-        run: |
-          cargo install leaktor
-
-      - name: Scan for secrets
-        run: |
-          leaktor scan --format sarif --output results.sarif --fail-on-found
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: results.sarif
+```bash
+leaktor scan --format json --output results.json
 ```
 
-#### GitLab CI
+### SARIF
 
-```yaml
-secrets-scan:
-  image: rust:latest
-  script:
-    - cargo install leaktor
-    - leaktor scan --format json --output results.json --fail-on-found
-  artifacts:
-    reports:
-      sast: results.json
+Static Analysis Results Interchange Format for CI/CD:
+
+```bash
+leaktor scan --format sarif --output results.sarif
 ```
 
-##  Configuration
+Compatible with:
+- GitHub Security tab
+- Azure DevOps
+- Visual Studio Code
+- Other SARIF-compatible tools
 
-Leaktor supports configuration files in TOML or YAML format:
+### HTML
 
-- `.leaktor.toml`
-- `.leaktor.yaml`
-- `.leaktor.yml`
+Beautiful, interactive web report with:
+- Search and filter functionality
+- Severity breakdown visualizations
+- Code context with syntax highlighting
+- Validation status indicators
+- Self-contained (no external dependencies)
 
-Place in your project root for automatic loading.
-
-##  Contributing
-
-Contributions are welcome! Here's how you can help:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`cargo test`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-##  Security
-
-Leaktor is designed for security professionals. Please use responsibly:
-
-- ✅ Scanning your own codebases
-- ✅ Authorized security assessments
-- ✅ Educational purposes
-- ❌ Unauthorized access to systems
-- ❌ Using validated credentials without permission
-
-If you find a security issue in Leaktor itself, please report it privately to the maintainer.
-
-##  License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-##  Author
-
-**Jonas Resch** ([@reschjonas](https://github.com/reschjonas))
-
-Pentester and security tools developer. Building practical tools for the security community.
-
-##  Acknowledgments
-
-- Built with [Rust](https://www.rust-lang.org/)
-
-##  Support
-
--  [Report a bug](https://github.com/reschjonas/leaktor/issues)
--  [Request a feature](https://github.com/reschjonas/leaktor/issues)
--  Contact: Create an issue on GitHub
+```bash
+leaktor scan --format html --output report.html
+```
 
 ---
 
-**⭐ If you find Leaktor useful, please star the repository!**
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick Start for Contributors
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes
+4. Run tests: `cargo test`
+5. Commit: `git commit -m 'Add amazing feature'`
+6. Push: `git push origin feature/amazing-feature`
+7. Open a Pull Request
+
+---
+
+## Security
+
+### Responsible Use
+
+Leaktor is designed for security professionals. Please use responsibly:
+
+| Acceptable Use | Unacceptable Use |
+|----------------|------------------|
+| ✅ Scanning your own codebases | ❌ Unauthorized access to systems |
+| ✅ Authorized security assessments | ❌ Using validated credentials without permission |
+| ✅ Educational purposes | ❌ Malicious activities |
+
+### Reporting Security Issues
+
+If you discover a security vulnerability in Leaktor itself, please report it privately to the maintainer. See [SECURITY.md](SECURITY.md) for details.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Author
+
+**Jonas Resch** ([@reschjonas](https://github.com/reschjonas))
+
+---
+
+## Acknowledgments
+
+Built with [Rust](https://www.rust-lang.org/) for maximum performance and safety.
+
+---
+
+## Support
+
+- **Documentation**: [Wiki](https://github.com/reschjonas/leaktor/wiki)
+- **Bug Reports**: [Issues](https://github.com/reschjonas/leaktor/issues)
+- **Feature Requests**: [Issues](https://github.com/reschjonas/leaktor/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/reschjonas/leaktor/discussions)
+
+---
+
+**If you find Leaktor useful, please consider starring the repository!**
