@@ -1,4 +1,5 @@
 FROM rust:latest AS builder
+LABEL org.opencontainers.image.source="https://github.com/reschjonas/leaktor"
 
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
