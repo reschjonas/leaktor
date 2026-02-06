@@ -1,6 +1,6 @@
 use crate::detectors::{ContextAnalyzer, PatternDetector};
 use crate::models::{Finding, Location};
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::Result;
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use std::fs;
@@ -95,8 +95,16 @@ impl FilesystemScanner {
     fn scan_file(&self, file_path: &PathBuf) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
 
-        let content = fs::read_to_string(file_path)
-            .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+        // Skip files that can't be read as UTF-8 (likely binary)
+        let content = match fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(_) => return Ok(findings),
+        };
+
+        // Skip lockfiles and minified files (high false-positive sources)
+        if self.is_lockfile(file_path) || self.is_minified(&content) {
+            return Ok(findings);
+        }
 
         let lines: Vec<&str> = content.lines().collect();
         let detector = PatternDetector::new();
@@ -108,31 +116,42 @@ impl FilesystemScanner {
                 continue;
             }
 
+            // Skip extremely long lines (likely minified/generated)
+            if line.len() > 5000 {
+                continue;
+            }
+
             // Check if line is a comment (but don't skip - just flag it)
             let is_comment = ContextAnalyzer::is_comment(line);
 
-            let secrets = detector.scan_line(line, self.entropy_threshold);
+            let pattern_matches = detector.scan_line_with_positions(line, self.entropy_threshold);
 
-            for mut secret in secrets {
+            for pattern_match in pattern_matches {
+                let mut secret = pattern_match.secret;
+
                 // Lower confidence for secrets in comments (but still report them)
                 if is_comment {
                     secret.confidence *= 0.75;
                 }
+
+                let line_before = if line_num > 0 {
+                    Some(lines[line_num - 1].to_string())
+                } else {
+                    None
+                };
+                let line_after = if line_num + 1 < lines.len() {
+                    Some(lines[line_num + 1].to_string())
+                } else {
+                    None
+                };
+
                 // Adjust severity based on context
                 secret.severity = ContextAnalyzer::adjust_severity(
                     secret.severity,
                     &Context {
-                        line_before: if line_num > 0 {
-                            Some(lines[line_num - 1].to_string())
-                        } else {
-                            None
-                        },
+                        line_before: line_before.clone(),
                         line_content: line.to_string(),
-                        line_after: if line_num + 1 < lines.len() {
-                            Some(lines[line_num + 1].to_string())
-                        } else {
-                            None
-                        },
+                        line_after: line_after.clone(),
                         is_test_file: file_context.is_test_file,
                         is_config_file: file_context.is_config_file,
                         is_documentation: file_context.is_documentation,
@@ -143,8 +162,8 @@ impl FilesystemScanner {
                 let location = Location {
                     file_path: file_path.clone(),
                     line_number: line_num + 1,
-                    column_start: 0,
-                    column_end: line.len(),
+                    column_start: pattern_match.column_start,
+                    column_end: pattern_match.column_end,
                     commit_hash: None,
                     commit_author: None,
                     commit_date: None,
@@ -152,16 +171,8 @@ impl FilesystemScanner {
 
                 let context = ContextAnalyzer::build_context(
                     line.to_string(),
-                    if line_num > 0 {
-                        Some(lines[line_num - 1].to_string())
-                    } else {
-                        None
-                    },
-                    if line_num + 1 < lines.len() {
-                        Some(lines[line_num + 1].to_string())
-                    } else {
-                        None
-                    },
+                    line_before,
+                    line_after,
                     &file_context,
                 );
 
@@ -173,16 +184,83 @@ impl FilesystemScanner {
         Ok(findings)
     }
 
+    fn is_lockfile(&self, path: &Path) -> bool {
+        let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let lockfiles = [
+            "package-lock.json",
+            "yarn.lock",
+            "pnpm-lock.yaml",
+            "Cargo.lock",
+            "Gemfile.lock",
+            "poetry.lock",
+            "Pipfile.lock",
+            "composer.lock",
+            "go.sum",
+            "flake.lock",
+            "pubspec.lock",
+            "packages.lock.json",
+            "bun.lockb",
+        ];
+        lockfiles.contains(&filename)
+    }
+
+    fn is_minified(&self, content: &str) -> bool {
+        // Check if first non-empty line is extremely long (likely minified)
+        if let Some(first_line) = content.lines().next() {
+            if first_line.len() > 10_000 {
+                return true;
+            }
+        }
+        // Check average line length - minified files have very long lines
+        let line_count = content.lines().count();
+        if line_count > 0 && line_count < 10 && content.len() > 50_000 {
+            return true;
+        }
+        false
+    }
+
     fn is_likely_binary(&self, path: &Path) -> bool {
         let binary_extensions = [
-            "exe", "dll", "so", "dylib", "bin", "dat", "db", "sqlite", "jpg", "jpeg", "png", "gif",
-            "bmp", "ico", "pdf", "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "mp3", "mp4", "avi",
-            "mov", "woff", "woff2", "ttf", "eot", "otf", "class", "pyc", "o", "a", "lib", "obj",
+            // Executables & Libraries
+            "exe", "dll", "so", "dylib", "bin", "com", "msi",
+            // Object files
+            "o", "a", "lib", "obj", "class", "pyc", "pyo", "elc", "beam",
+            // Archives
+            "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "zst", "lz4", "lzma",
+            // Images
+            "jpg", "jpeg", "png", "gif", "bmp", "ico", "svg", "webp", "tiff", "avif",
+            // Audio/Video
+            "mp3", "mp4", "avi", "mov", "mkv", "flac", "wav", "ogg", "webm",
+            // Fonts
+            "woff", "woff2", "ttf", "eot", "otf",
+            // Documents
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+            // Data
+            "dat", "db", "sqlite", "sqlite3", "mdb", "parquet", "arrow",
+            // Disk images
+            "iso", "img", "dmg", "vmdk",
+            // Source maps (high false-positive)
+            "map",
         ];
 
         if let Some(ext) = path.extension() {
             if let Some(ext_str) = ext.to_str() {
-                return binary_extensions.contains(&ext_str.to_lowercase().as_str());
+                if binary_extensions.contains(&ext_str.to_lowercase().as_str()) {
+                    return true;
+                }
+            }
+        }
+
+        // Content sniffing: read first 512 bytes and check for null bytes
+        if let Ok(file) = fs::File::open(path) {
+            use std::io::Read;
+            let mut buffer = [0u8; 512];
+            let mut reader = std::io::BufReader::new(file);
+            if let Ok(n) = reader.read(&mut buffer) {
+                // If we find null bytes in the first 512 bytes, it's likely binary
+                if buffer[..n].contains(&0) {
+                    return true;
+                }
             }
         }
 
@@ -231,7 +309,8 @@ mod tests {
     fn test_scan_file_with_secret() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let file_path = temp_dir.path().join("test.txt");
-        fs::write(&file_path, "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE")?;
+        // Use a realistic-looking (but still fake) key, not the AWS documentation example
+        fs::write(&file_path, "AWS_ACCESS_KEY=AKIAZ52HGXYRN4WBTEST")?;
 
         let scanner = FilesystemScanner::new(temp_dir.path().to_path_buf());
         let findings = scanner.scan()?;

@@ -159,7 +159,6 @@ impl ContextAnalyzer {
         let lower = line.to_lowercase();
 
         // Strong placeholder indicators - if these appear, it's likely a placeholder
-        // But we need to be more careful about partial matches
         let strong_indicators = [
             "your_api_key_here",
             "your_secret_here",
@@ -178,6 +177,16 @@ impl ContextAnalyzer {
             "todo:",
             "fixme:",
             "placeholder",
+            "put_your",
+            "set_your",
+            "fill_in",
+            "xxx_your",
+            "your-api-key",
+            "your-secret",
+            "your-token",
+            "insert-your",
+            "paste-your",
+            "sk-your",
         ];
 
         for indicator in &strong_indicators {
@@ -199,7 +208,6 @@ impl ContextAnalyzer {
         let value_lower = value_part.to_lowercase();
 
         // Only flag as placeholder if the VALUE itself looks like an example
-        // Not just if it contains these substrings
         let example_values = [
             "example",
             "sample",
@@ -210,11 +218,21 @@ impl ContextAnalyzer {
             "qwerty",
             "xxxxxxxx",
             "00000000",
+            "abcdef",
+            "123456",
+            "foobar",
+            "barfoo",
+            "testing",
+            "undefined",
+            "null",
+            "none",
+            "empty",
+            "default",
+            "changethis",
         ];
 
         // Check if the value is primarily one of these example patterns
         for example in &example_values {
-            // If value is exactly or mostly the example pattern
             if value_lower == *example
                 || value_lower.starts_with(&format!("\"{example}"))
                 || value_lower.starts_with(&format!("'{example}"))
@@ -222,6 +240,13 @@ impl ContextAnalyzer {
             {
                 return true;
             }
+        }
+
+        // Check for AWS example key specifically
+        if lower.contains("akiaiosfodnn7example")
+            || lower.contains("wjalrxutnfemi/k7mdeng/bpxrficyexamplekey")
+        {
+            return true;
         }
 
         // Check for repeated characters (like "xxxxxx" or "000000")

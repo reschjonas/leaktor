@@ -322,7 +322,7 @@ impl HtmlOutput {
         ));
 
         // Add visualization chart
-        if findings.len() > 0 {
+        if !findings.is_empty() {
             let total = findings.len() as f64;
             let crit_pct = (critical as f64 / total * 100.0) as u32;
             let high_pct = (high as f64 / total * 100.0) as u32;

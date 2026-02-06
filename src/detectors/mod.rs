@@ -4,4 +4,4 @@ pub mod patterns;
 
 pub use context::ContextAnalyzer;
 pub use entropy::EntropyAnalyzer;
-pub use patterns::PatternDetector;
+pub use patterns::{PatternDetector, PatternMatch};

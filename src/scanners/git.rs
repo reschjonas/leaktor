@@ -41,10 +41,24 @@ impl GitScanner {
 
         let mut findings = Vec::new();
 
+        // Always scan current working directory files
+        findings.extend(self.scan_working_directory(&repo)?);
+
+        // Additionally scan git history if enabled
         if self.scan_history {
-            findings.extend(self.scan_git_history(&repo)?);
-        } else {
-            findings.extend(self.scan_working_directory(&repo)?);
+            let history_findings = self.scan_git_history(&repo)?;
+
+            // Deduplicate: only add history findings that aren't already found in current files
+            for hf in history_findings {
+                let dominated = findings.iter().any(|f: &Finding| {
+                    f.location.file_path == hf.location.file_path
+                        && f.location.line_number == hf.location.line_number
+                        && f.secret.value == hf.secret.value
+                });
+                if !dominated {
+                    findings.push(hf);
+                }
+            }
         }
 
         Ok(findings)
@@ -212,9 +226,9 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let repo = Repository::init(temp_dir.path())?;
 
-        // Create a test file with a secret
+        // Create a test file with a secret (non-example key)
         let file_path = temp_dir.path().join("test.txt");
-        fs::write(&file_path, "AWS_KEY=AKIAIOSFODNN7EXAMPLE")?;
+        fs::write(&file_path, "AWS_KEY=AKIAZ52HGXYRN4WBTEST")?;
 
         // Add and commit
         let mut index = repo.index()?;
@@ -236,5 +250,34 @@ mod tests {
     fn test_git_scanner_creation() {
         let scanner = GitScanner::new(PathBuf::from("."));
         assert!(scanner.scan_history);
+    }
+
+    #[test]
+    fn test_git_scanner_finds_secrets_in_repo() -> Result<()> {
+        let (temp_dir, _repo) = create_test_repo()?;
+        let scanner = GitScanner::new(temp_dir.path().to_path_buf())
+            .with_history(true)
+            .with_entropy_threshold(3.0);
+        let findings = scanner.scan()?;
+        assert!(!findings.is_empty(), "Should find secrets in git repo");
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_scanner_without_history() -> Result<()> {
+        let (temp_dir, _repo) = create_test_repo()?;
+        let scanner = GitScanner::new(temp_dir.path().to_path_buf())
+            .with_history(false)
+            .with_entropy_threshold(3.0);
+        let findings = scanner.scan()?;
+        assert!(!findings.is_empty(), "Should find secrets in working directory even without history scanning");
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_scanner_with_max_depth() {
+        let scanner = GitScanner::new(PathBuf::from("."))
+            .with_max_depth(10);
+        assert_eq!(scanner.max_depth, Some(10));
     }
 }

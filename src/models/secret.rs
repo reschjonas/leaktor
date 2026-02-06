@@ -53,6 +53,62 @@ pub enum SecretType {
     GenericApiKey,
     GenericSecret,
 
+    // AI/ML Platforms
+    OpenAiApiKey,
+    AnthropicApiKey,
+    CohereApiKey,
+    HuggingFaceToken,
+    ReplicateApiKey,
+
+    // Additional Cloud/SaaS
+    DatadogApiKey,
+    DatadogAppKey,
+    CloudflareApiKey,
+    CloudflareApiToken,
+    DigitalOceanToken,
+    DigitalOceanSpacesKey,
+    VercelToken,
+    NetlifyToken,
+    LinearApiKey,
+    NotionApiKey,
+    AirtableApiKey,
+    PlanetScaleToken,
+
+    // Package Registries
+    NpmToken,
+    PyPiApiToken,
+    NuGetApiKey,
+    RubyGemsApiKey,
+
+    // Communication
+    DiscordBotToken,
+    DiscordWebhook,
+    TelegramBotToken,
+
+    // E-commerce / Payment
+    ShopifyApiKey,
+    ShopifySharedSecret,
+    SquareAccessToken,
+    PaypalClientSecret,
+
+    // Authentication
+    OktaApiToken,
+    Auth0ManagementToken,
+    FirebaseApiKey,
+    SupabaseAnonKey,
+    SupabaseServiceKey,
+
+    // Infrastructure
+    DockerHubToken,
+    HashiCorpVaultToken,
+    NewRelicApiKey,
+    SentryDsn,
+    AlgoliaApiKey,
+    ElasticApiKey,
+    GrafanaApiKey,
+    CircleCiToken,
+    TravisCiToken,
+
     // Other
     PasswordInUrl,
     GenericCredential,
@@ -116,6 +172,48 @@ impl<'de> Deserialize<'de> for SecretType {
             "OAuth Token" => Ok(SecretType::OAuthToken),
             "Generic API Key" => Ok(SecretType::GenericApiKey),
             "Generic Secret" => Ok(SecretType::GenericSecret),
+            "OpenAI API Key" => Ok(SecretType::OpenAiApiKey),
+            "Anthropic API Key" => Ok(SecretType::AnthropicApiKey),
+            "Cohere API Key" => Ok(SecretType::CohereApiKey),
+            "HuggingFace Token" => Ok(SecretType::HuggingFaceToken),
+            "Replicate API Key" => Ok(SecretType::ReplicateApiKey),
+            "Datadog API Key" => Ok(SecretType::DatadogApiKey),
+            "Datadog App Key" => Ok(SecretType::DatadogAppKey),
+            "Cloudflare API Key" => Ok(SecretType::CloudflareApiKey),
+            "Cloudflare API Token" => Ok(SecretType::CloudflareApiToken),
+            "DigitalOcean Token" => Ok(SecretType::DigitalOceanToken),
+            "DigitalOcean Spaces Key" => Ok(SecretType::DigitalOceanSpacesKey),
+            "Vercel Token" => Ok(SecretType::VercelToken),
+            "Netlify Token" => Ok(SecretType::NetlifyToken),
+            "Linear API Key" => Ok(SecretType::LinearApiKey),
+            "Notion API Key" => Ok(SecretType::NotionApiKey),
+            "Airtable API Key" => Ok(SecretType::AirtableApiKey),
+            "PlanetScale Token" => Ok(SecretType::PlanetScaleToken),
+            "NPM Token" => Ok(SecretType::NpmToken),
+            "PyPI API Token" => Ok(SecretType::PyPiApiToken),
+            "NuGet API Key" => Ok(SecretType::NuGetApiKey),
+            "RubyGems API Key" => Ok(SecretType::RubyGemsApiKey),
+            "Discord Bot Token" => Ok(SecretType::DiscordBotToken),
+            "Discord Webhook" => Ok(SecretType::DiscordWebhook),
+            "Telegram Bot Token" => Ok(SecretType::TelegramBotToken),
+            "Shopify API Key" => Ok(SecretType::ShopifyApiKey),
+            "Shopify Shared Secret" => Ok(SecretType::ShopifySharedSecret),
+            "Square Access Token" => Ok(SecretType::SquareAccessToken),
+            "PayPal Client Secret" => Ok(SecretType::PaypalClientSecret),
+            "Okta API Token" => Ok(SecretType::OktaApiToken),
+            "Auth0 Management Token" => Ok(SecretType::Auth0ManagementToken),
+            "Firebase API Key" => Ok(SecretType::FirebaseApiKey),
+            "Supabase Anon Key" => Ok(SecretType::SupabaseAnonKey),
+            "Supabase Service Key" => Ok(SecretType::SupabaseServiceKey),
+            "Docker Hub Token" => Ok(SecretType::DockerHubToken),
+            "HashiCorp Vault Token" => Ok(SecretType::HashiCorpVaultToken),
+            "New Relic API Key" => Ok(SecretType::NewRelicApiKey),
+            "Sentry DSN" => Ok(SecretType::SentryDsn),
+            "Algolia API Key" => Ok(SecretType::AlgoliaApiKey),
+            "Elastic API Key" => Ok(SecretType::ElasticApiKey),
+            "Grafana API Key" => Ok(SecretType::GrafanaApiKey),
+            "CircleCI Token" => Ok(SecretType::CircleCiToken),
+            "Travis CI Token" => Ok(SecretType::TravisCiToken),
             "Password in URL" => Ok(SecretType::PasswordInUrl),
             "Generic Credential" => Ok(SecretType::GenericCredential),
             "High Entropy String" => Ok(SecretType::HighEntropyString),
@@ -165,6 +263,48 @@ impl SecretType {
             SecretType::OAuthToken => "OAuth Token",
             SecretType::GenericApiKey => "Generic API Key",
             SecretType::GenericSecret => "Generic Secret",
+            SecretType::OpenAiApiKey => "OpenAI API Key",
+            SecretType::AnthropicApiKey => "Anthropic API Key",
+            SecretType::CohereApiKey => "Cohere API Key",
+            SecretType::HuggingFaceToken => "HuggingFace Token",
+            SecretType::ReplicateApiKey => "Replicate API Key",
+            SecretType::DatadogApiKey => "Datadog API Key",
+            SecretType::DatadogAppKey => "Datadog App Key",
+            SecretType::CloudflareApiKey => "Cloudflare API Key",
+            SecretType::CloudflareApiToken => "Cloudflare API Token",
+            SecretType::DigitalOceanToken => "DigitalOcean Token",
+            SecretType::DigitalOceanSpacesKey => "DigitalOcean Spaces Key",
+            SecretType::VercelToken => "Vercel Token",
+            SecretType::NetlifyToken => "Netlify Token",
+            SecretType::LinearApiKey => "Linear API Key",
+            SecretType::NotionApiKey => "Notion API Key",
+            SecretType::AirtableApiKey => "Airtable API Key",
+            SecretType::PlanetScaleToken => "PlanetScale Token",
+            SecretType::NpmToken => "NPM Token",
+            SecretType::PyPiApiToken => "PyPI API Token",
+            SecretType::NuGetApiKey => "NuGet API Key",
+            SecretType::RubyGemsApiKey => "RubyGems API Key",
+            SecretType::DiscordBotToken => "Discord Bot Token",
+            SecretType::DiscordWebhook => "Discord Webhook",
+            SecretType::TelegramBotToken => "Telegram Bot Token",
+            SecretType::ShopifyApiKey => "Shopify API Key",
+            SecretType::ShopifySharedSecret => "Shopify Shared Secret",
+            SecretType::SquareAccessToken => "Square Access Token",
+            SecretType::PaypalClientSecret => "PayPal Client Secret",
+            SecretType::OktaApiToken => "Okta API Token",
+            SecretType::Auth0ManagementToken => "Auth0 Management Token",
+            SecretType::FirebaseApiKey => "Firebase API Key",
+            SecretType::SupabaseAnonKey => "Supabase Anon Key",
+            SecretType::SupabaseServiceKey => "Supabase Service Key",
+            SecretType::DockerHubToken => "Docker Hub Token",
+            SecretType::HashiCorpVaultToken => "HashiCorp Vault Token",
+            SecretType::NewRelicApiKey => "New Relic API Key",
+            SecretType::SentryDsn => "Sentry DSN",
+            SecretType::AlgoliaApiKey => "Algolia API Key",
+            SecretType::ElasticApiKey => "Elastic API Key",
+            SecretType::GrafanaApiKey => "Grafana API Key",
+            SecretType::CircleCiToken => "CircleCI Token",
+            SecretType::TravisCiToken => "Travis CI Token",
             SecretType::PasswordInUrl => "Password in URL",
             SecretType::GenericCredential => "Generic Credential",
             SecretType::HighEntropyString => "High Entropy String",
@@ -226,13 +366,99 @@ impl Secret {
     }
 
     fn redact(value: &str) -> String {
-        if value.len() <= 8 {
-            return "*".repeat(value.len());
+        let chars: Vec<char> = value.chars().collect();
+        let char_count = chars.len();
+
+        if char_count <= 8 {
+            return "*".repeat(char_count);
         }
-        let prefix_len = 4.min(value.len() / 4);
-        let suffix_len = 4.min(value.len() / 4);
-        let prefix = &value[..prefix_len];
-        let suffix = &value[value.len() - suffix_len..];
+
+        let prefix_len = 4.min(char_count / 4);
+        let suffix_len = 4.min(char_count / 4);
+        let prefix: String = chars[..prefix_len].iter().collect();
+        let suffix: String = chars[char_count - suffix_len..].iter().collect();
         format!("{}...{}", prefix, suffix)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_redact_short_value() {
+        let secret = Secret::new(
+            SecretType::GenericApiKey,
+            "abc".to_string(),
+            2.0,
+            Severity::Low,
+            0.5,
+        );
+        assert_eq!(secret.redacted_value, "***");
+    }
+
+    #[test]
+    fn test_redact_normal_value() {
+        let secret = Secret::new(
+            SecretType::AwsAccessKey,
+            "AKIAIOSFODNN7TESTKEY".to_string(),
+            4.0,
+            Severity::Critical,
+            0.95,
+        );
+        // 20 chars: prefix=4, suffix=4 -> "AKIA...TKEY"
+        assert!(secret.redacted_value.starts_with("AKIA"));
+        assert!(secret.redacted_value.contains("..."));
+        assert!(!secret.redacted_value.contains("OSFODNN7"));
+    }
+
+    #[test]
+    fn test_redact_unicode_no_panic() {
+        // This should NOT panic (was a bug before)
+        let secret = Secret::new(
+            SecretType::GenericSecret,
+            "héllo_wörld_ñ_secret_value".to_string(),
+            3.0,
+            Severity::Medium,
+            0.7,
+        );
+        assert!(secret.redacted_value.contains("..."));
+    }
+
+    #[test]
+    fn test_redact_empty() {
+        let secret = Secret::new(
+            SecretType::GenericApiKey,
+            "".to_string(),
+            0.0,
+            Severity::Low,
+            0.5,
+        );
+        assert_eq!(secret.redacted_value, "");
+    }
+
+    #[test]
+    fn test_secret_type_roundtrip() {
+        let types = vec![
+            SecretType::AwsAccessKey,
+            SecretType::GitHubPat,
+            SecretType::OpenAiApiKey,
+            SecretType::DiscordBotToken,
+            SecretType::ShopifyApiKey,
+            SecretType::HashiCorpVaultToken,
+            SecretType::NpmToken,
+        ];
+
+        for secret_type in types {
+            let name = secret_type.as_str();
+            assert!(!name.is_empty(), "SecretType should have a non-empty name");
+        }
+    }
+
+    #[test]
+    fn test_severity_ordering() {
+        assert!(Severity::Low < Severity::Medium);
+        assert!(Severity::Medium < Severity::High);
+        assert!(Severity::High < Severity::Critical);
     }
 }

@@ -41,7 +41,7 @@ enum Commands {
         output: Option<PathBuf>,
 
         /// Scan git history for secrets in old commits
-        #[arg(long, default_value = "true", help = "Scan git history (true|false)")]
+        #[arg(long, default_value_t = true, num_args = 0..=1, default_missing_value = "true", help = "Scan git history (true|false)")]
         git_history: bool,
 
         /// Maximum git history depth to scan
@@ -61,7 +61,7 @@ enum Commands {
         verbose: bool,
 
         /// Show code context around findings
-        #[arg(short, long, default_value = "true", help = "Show code context (true|false)")]
+        #[arg(short, long, default_value_t = true, num_args = 0..=1, default_missing_value = "true", help = "Show code context (true|false)")]
         context: bool,
 
         /// Minimum confidence score (0.0 to 1.0) for findings
@@ -232,6 +232,23 @@ async fn scan_command(
 
     let start = Instant::now();
 
+    // Load configuration file if present
+    let config = Config::load_from_current_dir().unwrap_or_default();
+
+    // Merge CLI flags with config file (CLI takes precedence)
+    let effective_entropy = if entropy != 3.5 {
+        entropy
+    } else {
+        config.entropy_threshold
+    };
+    let effective_min_confidence = if min_confidence != 0.6 {
+        min_confidence
+    } else {
+        config.min_confidence
+    };
+    let effective_git_history = git_history && config.scan_git_history;
+    let effective_exclude_tests = exclude_tests || config.exclude_tests;
+
     // Load ignore manager
     let ignore_file = path.join(".leaktorignore");
     let ignore_manager = if ignore_file.exists() {
@@ -250,13 +267,14 @@ async fn scan_command(
     spinner.set_message("Scanning for secrets...");
 
     // Determine scanner type
+    let effective_max_depth = max_depth.or(config.max_git_depth);
     let mut findings = if path.join(".git").exists() {
         spinner.set_message("Scanning git repository...");
         let scanner = GitScanner::new(path.clone())
-            .with_history(git_history)
-            .with_entropy_threshold(entropy);
+            .with_history(effective_git_history)
+            .with_entropy_threshold(effective_entropy);
 
-        let scanner = if let Some(depth) = max_depth {
+        let scanner = if let Some(depth) = effective_max_depth {
             scanner.with_max_depth(depth)
         } else {
             scanner
@@ -265,7 +283,9 @@ async fn scan_command(
         scanner.scan()?
     } else {
         spinner.set_message("Scanning filesystem...");
-        let scanner = FilesystemScanner::new(path.clone()).with_entropy_threshold(entropy);
+        let scanner = FilesystemScanner::new(path.clone())
+            .with_entropy_threshold(effective_entropy)
+            .with_max_file_size(config.max_file_size);
 
         scanner.scan()?
     };
@@ -275,12 +295,12 @@ async fn scan_command(
     // Filter findings
     findings.retain(|f| {
         // Filter by confidence
-        if f.secret.confidence < min_confidence {
+        if f.secret.confidence < effective_min_confidence {
             return false;
         }
 
         // Filter by test files
-        if exclude_tests && f.context.is_test_file {
+        if effective_exclude_tests && f.context.is_test_file {
             return false;
         }
 
@@ -292,8 +312,23 @@ async fn scan_command(
         true
     });
 
-    // Validate secrets if requested
-    if validate && !findings.is_empty() {
+    // Deduplicate findings: same file + line + secret value = duplicate
+    findings.sort_by(|a, b| {
+        a.location
+            .file_path
+            .cmp(&b.location.file_path)
+            .then(a.location.line_number.cmp(&b.location.line_number))
+            .then(a.location.column_start.cmp(&b.location.column_start))
+    });
+    findings.dedup_by(|a, b| {
+        a.location.file_path == b.location.file_path
+            && a.location.line_number == b.location.line_number
+            && a.secret.value == b.secret.value
+    });
+
+    // Validate secrets if requested (or if config enables it)
+    let should_validate = validate || config.enable_validation;
+    if should_validate && !findings.is_empty() {
         let validate_spinner = ProgressBar::new(findings.len() as u64);
         validate_spinner.set_style(
             ProgressStyle::default_bar()
@@ -302,8 +337,13 @@ async fn scan_command(
                 .progress_chars("#>-"),
         );
 
-        for finding in &mut findings {
-            validators::validate_secret(&mut finding.secret).await?;
+        // Extract secrets for parallel validation
+        let mut secrets: Vec<_> = findings.iter().map(|f| f.secret.clone()).collect();
+        validators::validate_secrets_parallel(&mut secrets).await?;
+
+        // Write results back to findings
+        for (finding, secret) in findings.iter_mut().zip(secrets.into_iter()) {
+            finding.secret.validated = secret.validated;
             validate_spinner.inc(1);
         }
 
@@ -357,10 +397,25 @@ async fn scan_command(
         }
     }
 
+    // Print scan statistics
+    let total_files_scanned = if path.join(".git").exists() {
+        let scanner = FilesystemScanner::new(path.clone());
+        scanner.get_stats().map(|s| s.total_files).unwrap_or(0)
+    } else {
+        let scanner = FilesystemScanner::new(path.clone());
+        scanner.get_stats().map(|s| s.total_files).unwrap_or(0)
+    };
+
     println!(
         "\n{} {}",
         "⏱".dimmed(),
-        format!("Scan completed in {:.2}s", duration.as_secs_f64()).dimmed()
+        format!(
+            "Scan completed in {:.2}s | {} files scanned | {} findings",
+            duration.as_secs_f64(),
+            total_files_scanned,
+            findings.len()
+        )
+        .dimmed()
     );
 
     // Exit with error if secrets found and fail_on_found is set
@@ -434,18 +489,44 @@ fn install_hook_command(path: PathBuf) -> Result<()> {
     let hook_path = hooks_dir.join("pre-commit");
     let hook_content = r#"#!/bin/sh
 # Leaktor pre-commit hook
+# Scans only staged files for secrets before committing
 
-echo "🔒 Running Leaktor security scan..."
+echo "🔒 Running Leaktor security scan on staged files..."
 
-leaktor scan --fail-on-found --format console
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 
-if [ $? -ne 0 ]; then
-    echo "❌ Secrets detected! Commit aborted."
-    echo "   Review the findings above or use 'git commit --no-verify' to bypass."
+if [ -z "$STAGED_FILES" ]; then
+    echo "✓ No staged files to scan"
+    exit 0
+fi
+
+# Create a temporary directory for staged content
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+# Copy staged file contents to temp directory
+for FILE in $STAGED_FILES; do
+    DIR=$(dirname "$FILE")
+    mkdir -p "$TMPDIR/$DIR"
+    git show ":$FILE" > "$TMPDIR/$FILE" 2>/dev/null || continue
+done
+
+# Scan the staged files
+leaktor scan "$TMPDIR" --git-history=false --fail-on-found --format console --min-confidence 0.7
+
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "❌ Secrets detected in staged files! Commit aborted."
+    echo "   Review the findings above and remove secrets before committing."
+    echo "   Use 'git commit --no-verify' to bypass (not recommended)."
+    echo "   Use '// leaktor:ignore' to suppress specific false positives."
     exit 1
 fi
 
-echo "✓ No secrets detected"
+echo "✓ No secrets detected in staged files"
 exit 0
 "#;
 
@@ -486,7 +567,7 @@ fn list_command() {
         let secret_name = pattern.name.as_str();
         let category = if secret_name.contains("AWS") {
             "AWS"
-        } else if secret_name.contains("GCP") {
+        } else if secret_name.contains("GCP") || secret_name.contains("Firebase") {
             "Google Cloud"
         } else if secret_name.contains("Azure") {
             "Azure"
@@ -496,16 +577,75 @@ fn list_command() {
             "GitLab"
         } else if secret_name.contains("Private Key") || secret_name.contains("SSH") {
             "Private Keys"
-        } else if secret_name.contains("Database") || secret_name.contains("Connection") {
+        } else if secret_name.contains("Database")
+            || secret_name.contains("Connection")
+            || secret_name.contains("PlanetScale")
+            || secret_name.contains("Supabase")
+        {
             "Databases"
+        } else if secret_name.contains("OpenAI")
+            || secret_name.contains("Anthropic")
+            || secret_name.contains("Cohere")
+            || secret_name.contains("HuggingFace")
+            || secret_name.contains("Replicate")
+        {
+            "AI/ML"
+        } else if secret_name.contains("NPM")
+            || secret_name.contains("PyPI")
+            || secret_name.contains("NuGet")
+            || secret_name.contains("RubyGems")
+            || secret_name.contains("Docker Hub")
+        {
+            "Package Registries"
+        } else if secret_name.contains("Discord")
+            || secret_name.contains("Slack")
+            || secret_name.contains("Telegram")
+        {
+            "Communication"
+        } else if secret_name.contains("Stripe")
+            || secret_name.contains("Shopify")
+            || secret_name.contains("Square")
+            || secret_name.contains("PayPal")
+        {
+            "Payment/E-commerce"
+        } else if secret_name.contains("Datadog")
+            || secret_name.contains("New Relic")
+            || secret_name.contains("Sentry")
+            || secret_name.contains("Grafana")
+            || secret_name.contains("Elastic")
+            || secret_name.contains("Algolia")
+        {
+            "Monitoring/Observability"
+        } else if secret_name.contains("CircleCI")
+            || secret_name.contains("Travis")
+            || secret_name.contains("Vercel")
+            || secret_name.contains("Netlify")
+            || secret_name.contains("Heroku")
+        {
+            "CI/CD & Hosting"
+        } else if secret_name.contains("Okta")
+            || secret_name.contains("Auth0")
+            || secret_name.contains("JWT")
+            || secret_name.contains("OAuth")
+        {
+            "Authentication"
+        } else if secret_name.contains("Cloudflare")
+            || secret_name.contains("DigitalOcean")
+            || secret_name.contains("HashiCorp")
+            || secret_name.contains("Linear")
+            || secret_name.contains("Notion")
+            || secret_name.contains("Airtable")
+        {
+            "Cloud Services"
         } else {
             "Other"
         };
 
-        by_category
-            .entry(category)
-            .or_default()
-            .push(secret_name.to_string());
+        // Deduplicate within category
+        let entries = by_category.entry(category).or_default();
+        if !entries.contains(&secret_name.to_string()) {
+            entries.push(secret_name.to_string());
+        }
     }
 
     let categories = [
@@ -514,8 +654,16 @@ fn list_command() {
         "Azure",
         "GitHub",
         "GitLab",
+        "AI/ML",
         "Private Keys",
         "Databases",
+        "Package Registries",
+        "Communication",
+        "Payment/E-commerce",
+        "Monitoring/Observability",
+        "CI/CD & Hosting",
+        "Authentication",
+        "Cloud Services",
         "Other",
     ];
 
@@ -529,6 +677,18 @@ fn list_command() {
         }
     }
 
-    println!("{}", "Total patterns: ".bold());
-    println!("{}", leaktor::detectors::patterns::PATTERNS.len());
+    // Deduplicate for unique pattern count
+    let mut unique_names: Vec<&str> = leaktor::detectors::patterns::PATTERNS
+        .iter()
+        .map(|p| p.name.as_str())
+        .collect();
+    unique_names.sort();
+    unique_names.dedup();
+
+    println!(
+        "{} {} ({} regex patterns)",
+        "Total secret types:".bold(),
+        unique_names.len(),
+        leaktor::detectors::patterns::PATTERNS.len()
+    );
 }

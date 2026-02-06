@@ -11,12 +11,15 @@ impl EntropyAnalyzer {
         }
 
         let mut frequency: HashMap<char, usize> = HashMap::new();
-        let length = text.len() as f64;
+        let mut char_count: usize = 0;
 
-        // Count character frequencies
+        // Count character frequencies using char count, not byte length
         for ch in text.chars() {
             *frequency.entry(ch).or_insert(0) += 1;
+            char_count += 1;
         }
+
+        let length = char_count as f64;
 
         // Calculate entropy using Shannon formula: -Σ(p(x) * log2(p(x)))
         let mut entropy = 0.0;
@@ -103,8 +106,35 @@ mod tests {
     }
 
     #[test]
+    fn test_entropy_empty() {
+        assert_eq!(EntropyAnalyzer::calculate(""), 0.0);
+    }
+
+    #[test]
+    fn test_entropy_single_char() {
+        let entropy = EntropyAnalyzer::calculate("a");
+        assert_eq!(entropy, 0.0);
+    }
+
+    #[test]
+    fn test_entropy_unicode_chars() {
+        // Bug fix: should use char count not byte count
+        let text = "héllo wörld ñ";
+        let entropy = EntropyAnalyzer::calculate(text);
+        assert!(entropy > 0.0, "Unicode entropy should be positive");
+        // Shouldn't panic on multi-byte chars
+    }
+
+    #[test]
+    fn test_entropy_realistic_api_key() {
+        // A realistic-looking API key should have high entropy
+        let key = "sk_live_51H4gJkLmNoPqRsTuVwXyZ0123456789AbCdEfGh";
+        let entropy = EntropyAnalyzer::calculate(key);
+        assert!(entropy > 4.0, "Realistic API key should have high entropy, got: {}", entropy);
+    }
+
+    #[test]
     fn test_is_high_entropy() {
-        // Test with realistic threshold (3.5 is default in config)
         assert!(EntropyAnalyzer::is_high_entropy("Xy9#mK2@qL5&", 3.5));
         assert!(EntropyAnalyzer::is_high_entropy("aB3$xY9#mK2@qL5&pN7!", 4.0));
         assert!(!EntropyAnalyzer::is_high_entropy("password", 4.0));
@@ -120,5 +150,18 @@ mod tests {
     fn test_hex_detection() {
         let analysis = EntropyAnalyzer::analyze_detailed("deadbeef1234567890abcdef");
         assert!(analysis.is_hex_like);
+    }
+
+    #[test]
+    fn test_not_base64() {
+        let analysis = EntropyAnalyzer::analyze_detailed("hello world $pecial!");
+        assert!(!analysis.is_base64_like);
+    }
+
+    #[test]
+    fn test_detailed_analysis_length() {
+        let text = "abc123def456";
+        let analysis = EntropyAnalyzer::analyze_detailed(text);
+        assert_eq!(analysis.length, 12);
     }
 }
