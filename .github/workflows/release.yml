@@ -36,7 +36,7 @@ jobs:
         body: |
           ## Leaktor v${{ steps.get_version.outputs.VERSION }}
 
-          ### 🚀 Installation
+          ### Installation
 
           **Linux (x86_64):**
           ```bash
@@ -67,10 +67,10 @@ jobs:
           cargo install leaktor
           ```
 
-          ### 📦 Assets
+          ### Assets
           See below for pre-built binaries for all platforms.
 
-          ### 📝 Changelog
+          ### Changelog
           See [CHANGELOG.md](https://github.com/reschjonas/leaktor/blob/master/CHANGELOG.md) for details.
         draft: false
         prerelease: false
