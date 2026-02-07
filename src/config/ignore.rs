@@ -3,10 +3,12 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Manages ignore patterns similar to .gitignore
+/// Manages ignore patterns similar to .gitignore, with fingerprint allowlisting.
 pub struct IgnoreManager {
     patterns: HashSet<String>,
     path_patterns: HashSet<PathBuf>,
+    /// SHA-256 fingerprint hashes to allowlist (from baseline or .leaktorignore).
+    fingerprints: HashSet<String>,
 }
 
 impl IgnoreManager {
@@ -14,6 +16,7 @@ impl IgnoreManager {
         Self {
             patterns: HashSet::new(),
             path_patterns: HashSet::new(),
+            fingerprints: HashSet::new(),
         }
     }
 
@@ -31,7 +34,18 @@ impl IgnoreManager {
                     continue;
                 }
 
-                manager.add_pattern(line.to_string());
+                // Fingerprint allowlist: lines starting with "fingerprint:" or hex-only 64-char strings
+                if let Some(fp) = line.strip_prefix("fingerprint:") {
+                    let fp = fp.trim();
+                    if !fp.is_empty() {
+                        manager.fingerprints.insert(fp.to_string());
+                    }
+                } else if line.len() == 64 && line.chars().all(|c| c.is_ascii_hexdigit()) {
+                    // A bare 64-character hex string is treated as a fingerprint
+                    manager.fingerprints.insert(line.to_string());
+                } else {
+                    manager.add_pattern(line.to_string());
+                }
             }
         }
 
@@ -48,7 +62,12 @@ impl IgnoreManager {
         self.path_patterns.insert(path);
     }
 
-    /// Check if a finding should be ignored based on patterns
+    /// Add a fingerprint to the allowlist
+    pub fn add_fingerprint(&mut self, fingerprint: String) {
+        self.fingerprints.insert(fingerprint);
+    }
+
+    /// Check if a finding should be ignored based on file patterns or inline comments.
     pub fn should_ignore(&self, file_path: &Path, line_content: &str) -> bool {
         // Check if file path matches any pattern
         let path_str = file_path.to_string_lossy();
@@ -69,6 +88,11 @@ impl IgnoreManager {
         }
 
         false
+    }
+
+    /// Check if a fingerprint is in the allowlist.
+    pub fn should_ignore_fingerprint(&self, fingerprint: &str) -> bool {
+        self.fingerprints.contains(fingerprint)
     }
 
     /// Check if line has an inline ignore comment
@@ -119,11 +143,19 @@ impl IgnoreManager {
         let mut content = String::new();
         content.push_str("# Leaktor ignore patterns\n");
         content.push_str("# Patterns support wildcards (*)\n");
-        content.push_str("# Lines starting with # are comments\n\n");
+        content.push_str("# Lines starting with # are comments\n");
+        content.push_str("# Use fingerprint:<hash> or a bare 64-char hex hash to allowlist by fingerprint\n\n");
 
         for pattern in &self.patterns {
             content.push_str(pattern);
             content.push('\n');
+        }
+
+        if !self.fingerprints.is_empty() {
+            content.push_str("\n# Allowlisted fingerprints\n");
+            for fp in &self.fingerprints {
+                content.push_str(&format!("fingerprint:{}\n", fp));
+            }
         }
 
         fs::write(path, content)?;
@@ -177,5 +209,35 @@ mod tests {
             "const key = 'secret'; // leaktor:ignore"
         ));
         assert!(!manager.should_ignore(Path::new("test.js"), "const key = 'secret';"));
+    }
+
+    #[test]
+    fn test_fingerprint_allowlist() {
+        let mut manager = IgnoreManager::new();
+        let fp = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+        manager.add_fingerprint(fp.to_string());
+
+        assert!(manager.should_ignore_fingerprint(fp));
+        assert!(!manager.should_ignore_fingerprint("deadbeef"));
+    }
+
+    #[test]
+    fn test_load_fingerprints_from_file() -> Result<()> {
+        use tempfile::TempDir;
+        let dir = TempDir::new()?;
+        let path = dir.path().join(".leaktorignore");
+
+        let content = "# patterns\n*.test.js\n\n# fingerprints\nfingerprint:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2\ndeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n";
+        fs::write(&path, content)?;
+
+        let manager = IgnoreManager::load_from_file(&path)?;
+        assert!(manager.should_ignore_fingerprint(
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        ));
+        assert!(manager.should_ignore_fingerprint(
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        ));
+        assert!(manager.should_ignore(Path::new("foo.test.js"), "anything"));
+        Ok(())
     }
 }

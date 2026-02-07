@@ -5,6 +5,30 @@ All notable changes to Leaktor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-07
+
+### Added
+
+- **`leaktor init`** -- one-command project setup: creates config, ignore file, pre-commit hook, GitHub Actions workflow, and optional baseline. Supports `--no-hook`, `--no-ci`, `--baseline` flags. Idempotent (skips existing files on re-run).
+- **`leaktor trace`** -- blast radius analysis: find everywhere a secret is referenced across the codebase. Supports tracing by value, by secret type (`--type`), or from a file (`--file`). Shows categorized blast radius summary.
+- **`leaktor diff`** -- scan comparison: compare two JSON scan results to see added, removed, and unchanged findings. Supports console and JSON output formats.
+- **`--include-deps`** flag on `leaktor scan` -- scans dependency directories (`node_modules/`, `vendor/`, `.venv/`, etc.) that are normally skipped. Uses `walkdir` directly to bypass gitignore filtering for maximum coverage.
+- **Multi-format scanning** -- automatically decodes and scans structured files:
+  - Kubernetes Secrets: base64 `.data` values decoded and scanned
+  - Terraform state (`.tfstate`): JSON values recursively walked + base64 blobs decoded
+  - Docker Compose: `environment:` values scanned (both mapping and list styles)
+  - CloudFormation: `Parameters` defaults and `Resources` properties scanned
+- 61 new secret patterns (146 types total, 152 regex patterns): 1Password, Age, Alibaba, Artifactory, Asana, Azure AD, Beamer, Bitwarden, Clojars, Codecov, Coinbase, Contentful, Dropbox, DSA, Duffel, Dynatrace, EasyPost, Facebook, Flutterwave, Frame.io, FreshBooks, GitHub App/Fine-grained PAT, Google OAuth, Infracost, Intercom, Kraken, Lob, MessageBird, Neon, New Relic Browser, NY Times, PKCS8, PlanetScale, Postman, Prefect, Railway, RapidAPI, ReadMe, Scalingo, Sourcegraph, Tailscale, Tencent, Trello, Turborepo, Twitch, Twitter, Typeform, Vault Batch, Yandex, Zendesk
+- DSL pattern configuration via `.leaktor.toml` custom patterns (name, regex, severity, confidence, description)
+- Rule-based allowlisting in `.leaktor.toml` (match by secret type, file path glob, value regex, severity)
+
+### Fixed
+
+- `has_repeated_pattern` in context analysis was too aggressive -- raised threshold from 5 to 8 consecutive chars, excluded structural characters (`-`, `=`, `.`, `_`), and required 60% coverage for repeated short patterns. Fixes false negatives on PEM headers and tokens with common repeated characters.
+- GitScanner now propagates `include_deps` to its internal FilesystemScanner
+
+[0.3.0]: https://github.com/reschjonas/leaktor/releases/tag/v0.3.0
+
 ## [0.2.0] - 2026-02-06
 
 ### Added
@@ -47,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Initial Release
 
-First public release of Leaktor - a blazingly fast secrets scanner with validation capabilities!
+First public release of Leaktor -- a secrets scanner with pattern matching, entropy analysis, and live validation.
 
 ### Features
 

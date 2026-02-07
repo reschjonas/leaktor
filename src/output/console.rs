@@ -28,10 +28,10 @@ impl ConsoleOutput {
 
     fn severity_icon(&self, severity: Severity) -> &str {
         match severity {
-            Severity::Critical => "🔴",
-            Severity::High => "🟠",
-            Severity::Medium => "🟡",
-            Severity::Low => "🔵",
+            Severity::Critical => "[CRITICAL]",
+            Severity::High => "[HIGH]",
+            Severity::Medium => "[MEDIUM]",
+            Severity::Low => "[LOW]",
         }
     }
 
@@ -42,7 +42,7 @@ impl ConsoleOutput {
         );
         println!(
             "{}",
-            "║           🔒 LEAKTOR SECURITY SCAN            ║".bright_cyan()
+            "║            LEAKTOR SECURITY SCAN              ║".bright_cyan()
         );
         println!(
             "{}",
@@ -113,9 +113,9 @@ impl ConsoleOutput {
         // Validated status
         if let Some(validated) = finding.secret.validated {
             if validated {
-                println!("  {} {}", "Status:".bold(), "✓ VALIDATED".green().bold());
+                println!("  {} {}", "Status:".bold(), "[OK] VALIDATED".green().bold());
             } else {
-                println!("  {} {}", "Status:".bold(), "✗ INVALID".red());
+                println!("  {} {}", "Status:".bold(), "[X] INVALID".red());
             }
         }
 
@@ -164,12 +164,12 @@ impl ConsoleOutput {
 
         // Flags
         if finding.context.is_test_file {
-            println!("  {} {}", "⚠".yellow(), "Found in test file".yellow());
+            println!("  {} {}", "[!]".yellow(), "Found in test file".yellow());
         }
         if finding.is_likely_false_positive() {
             println!(
                 "  {} {}",
-                "ℹ".blue(),
+                "[i]".blue(),
                 "Likely false positive".blue().dimmed()
             );
         }
@@ -200,14 +200,14 @@ impl ConsoleOutput {
         if findings_count == 0 {
             println!(
                 "{}",
-                "✓ No secrets detected! Your code looks clean."
+                "No secrets detected."
                     .green()
                     .bold()
             );
         } else {
             println!(
                 "{}",
-                format!("⚠ Scan complete. {} secrets detected.", findings_count)
+                format!("Scan complete. {} secrets detected.", findings_count)
                     .yellow()
                     .bold()
             );

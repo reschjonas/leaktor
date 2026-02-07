@@ -1,0 +1,205 @@
+name: 'Leaktor Secrets Scanner'
+description: 'Scan your repository for leaked secrets, API keys, and credentials with Leaktor'
+author: 'Jonas Resch'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  version:
+    description: 'Leaktor version to use (e.g., "0.2.0" or "latest")'
+    required: false
+    default: 'latest'
+  scan-path:
+    description: 'Path to scan (defaults to repository root)'
+    required: false
+    default: '.'
+  format:
+    description: 'Output format: console, json, sarif, html'
+    required: false
+    default: 'sarif'
+  output:
+    description: 'Output file path'
+    required: false
+    default: 'leaktor-results.sarif'
+  validate:
+    description: 'Validate detected secrets against live APIs'
+    required: false
+    default: 'false'
+  fail-on-found:
+    description: 'Fail the action if any secrets are found'
+    required: false
+    default: 'true'
+  baseline:
+    description: 'Path to baseline file to suppress known findings'
+    required: false
+    default: ''
+  scan-mode:
+    description: 'Scan mode: full, pr-diff, or history'
+    required: false
+    default: 'full'
+  min-confidence:
+    description: 'Minimum confidence threshold (0.0-1.0)'
+    required: false
+    default: '0.6'
+  exclude-tests:
+    description: 'Exclude test files from scanning'
+    required: false
+    default: 'false'
+  extra-args:
+    description: 'Additional arguments to pass to leaktor scan'
+    required: false
+    default: ''
+
+outputs:
+  findings-count:
+    description: 'Number of secrets found'
+    value: ${{ steps.scan.outputs.findings_count }}
+  sarif-file:
+    description: 'Path to the SARIF output file (if format is sarif)'
+    value: ${{ steps.scan.outputs.sarif_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Leaktor
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        VERSION="${{ inputs.version }}"
+
+        if [ "$VERSION" = "latest" ]; then
+          echo "Installing latest version of Leaktor..."
+          cargo install leaktor 2>/dev/null || {
+            # Fallback: download pre-built binary
+            ARCH=$(uname -m)
+            OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+            if [ "$OS" = "linux" ] && [ "$ARCH" = "x86_64" ]; then
+              ASSET="leaktor-linux-amd64"
+            elif [ "$OS" = "darwin" ] && [ "$ARCH" = "x86_64" ]; then
+              ASSET="leaktor-macos-amd64"
+            elif [ "$OS" = "darwin" ] && [ "$ARCH" = "arm64" ]; then
+              ASSET="leaktor-macos-arm64"
+            else
+              echo "::error::Unsupported platform: $OS/$ARCH"
+              exit 1
+            fi
+
+            DOWNLOAD_URL="https://github.com/reschjonas/leaktor/releases/latest/download/$ASSET"
+            echo "Downloading from $DOWNLOAD_URL"
+            curl -fsSL "$DOWNLOAD_URL" -o /usr/local/bin/leaktor
+            chmod +x /usr/local/bin/leaktor
+          }
+        else
+          echo "Installing Leaktor v${VERSION}..."
+          cargo install leaktor --version "$VERSION" 2>/dev/null || {
+            ARCH=$(uname -m)
+            OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+            if [ "$OS" = "linux" ] && [ "$ARCH" = "x86_64" ]; then
+              ASSET="leaktor-linux-amd64"
+            elif [ "$OS" = "darwin" ] && [ "$ARCH" = "x86_64" ]; then
+              ASSET="leaktor-macos-amd64"
+            elif [ "$OS" = "darwin" ] && [ "$ARCH" = "arm64" ]; then
+              ASSET="leaktor-macos-arm64"
+            else
+              echo "::error::Unsupported platform: $OS/$ARCH"
+              exit 1
+            fi
+
+            DOWNLOAD_URL="https://github.com/reschjonas/leaktor/releases/download/v${VERSION}/$ASSET"
+            echo "Downloading from $DOWNLOAD_URL"
+            curl -fsSL "$DOWNLOAD_URL" -o /usr/local/bin/leaktor
+            chmod +x /usr/local/bin/leaktor
+          }
+        fi
+
+        leaktor --version
+
+    - name: Run Leaktor Scan
+      id: scan
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        ARGS="scan ${{ inputs.scan-path }}"
+        ARGS="$ARGS --format ${{ inputs.format }}"
+        ARGS="$ARGS --min-confidence ${{ inputs.min-confidence }}"
+
+        # Output file
+        if [ -n "${{ inputs.output }}" ]; then
+          ARGS="$ARGS --output ${{ inputs.output }}"
+        fi
+
+        # Validation
+        if [ "${{ inputs.validate }}" = "true" ]; then
+          ARGS="$ARGS --validate"
+        fi
+
+        # Fail on found
+        if [ "${{ inputs.fail-on-found }}" = "true" ]; then
+          ARGS="$ARGS --fail-on-found"
+        fi
+
+        # Exclude tests
+        if [ "${{ inputs.exclude-tests }}" = "true" ]; then
+          ARGS="$ARGS --exclude-tests"
+        fi
+
+        # Baseline
+        if [ -n "${{ inputs.baseline }}" ] && [ -f "${{ inputs.baseline }}" ]; then
+          ARGS="$ARGS --baseline ${{ inputs.baseline }}"
+        fi
+
+        # Scan mode
+        SCAN_MODE="${{ inputs.scan-mode }}"
+        if [ "$SCAN_MODE" = "pr-diff" ]; then
+          # For PR diff scanning, use --since-commit with the merge base
+          if [ -n "${GITHUB_BASE_REF:-}" ]; then
+            MERGE_BASE=$(git merge-base "origin/${GITHUB_BASE_REF}" HEAD 2>/dev/null || echo "")
+            if [ -n "$MERGE_BASE" ]; then
+              ARGS="$ARGS --since-commit $MERGE_BASE"
+            fi
+          fi
+        elif [ "$SCAN_MODE" = "history" ]; then
+          ARGS="$ARGS --git-history=true"
+        fi
+
+        # Extra args
+        if [ -n "${{ inputs.extra-args }}" ]; then
+          ARGS="$ARGS ${{ inputs.extra-args }}"
+        fi
+
+        echo "Running: leaktor $ARGS"
+
+        # Run and capture exit code
+        EXIT_CODE=0
+        leaktor $ARGS || EXIT_CODE=$?
+
+        # Count findings from output file if it exists
+        FINDINGS_COUNT=0
+        if [ -f "${{ inputs.output }}" ]; then
+          if [ "${{ inputs.format }}" = "json" ]; then
+            FINDINGS_COUNT=$(python3 -c "import json; d=json.load(open('${{ inputs.output }}')); print(d.get('summary',{}).get('total_findings',0))" 2>/dev/null || echo "0")
+          elif [ "${{ inputs.format }}" = "sarif" ]; then
+            FINDINGS_COUNT=$(python3 -c "import json; d=json.load(open('${{ inputs.output }}')); print(sum(len(r.get('results',[])) for r in d.get('runs',[])))" 2>/dev/null || echo "0")
+          fi
+        fi
+
+        echo "findings_count=$FINDINGS_COUNT" >> "$GITHUB_OUTPUT"
+
+        if [ "${{ inputs.format }}" = "sarif" ] && [ -f "${{ inputs.output }}" ]; then
+          echo "sarif_file=${{ inputs.output }}" >> "$GITHUB_OUTPUT"
+        fi
+
+        exit $EXIT_CODE
+
+    - name: Upload SARIF to GitHub Security
+      if: inputs.format == 'sarif' && always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.output }}
+      continue-on-error: true

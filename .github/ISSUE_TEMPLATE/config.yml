@@ -1,11 +1,11 @@
 blank_issues_enabled: true
 contact_links:
-  - name: 💬 Discussions
+  - name: Discussions
     url: https://github.com/reschjonas/leaktor/discussions
     about: Ask questions and discuss ideas with the community
-  - name: 📖 Documentation
+  - name: Documentation
     url: https://github.com/reschjonas/leaktor#readme
     about: Read the documentation
-  - name: 🔒 Security Issue
+  - name: Security Issue
     url: https://github.com/reschjonas/leaktor/security/advisories/new
     about: Report a security vulnerability privately

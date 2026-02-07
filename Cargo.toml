@@ -1,9 +1,9 @@
 [package]
 name = "leaktor"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Jonas Resch <reschjonas>"]
-description = "A blazingly fast secrets scanner with validation capabilities"
+description = "A secrets scanner with pattern matching, entropy analysis, and live validation"
 license = "MIT"
 repository = "https://github.com/reschjonas/leaktor"
 homepage = "https://github.com/reschjonas/leaktor"

@@ -264,6 +264,6 @@ Advanced contributions:
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
 
-## Thank You!
+## Thank You
 
-Every contribution helps make Leaktor better for the security community. Thank you for your time and effort!
+Contributions help improve Leaktor for everyone. Your time and effort are appreciated.

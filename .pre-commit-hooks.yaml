@@ -1,0 +1,17 @@
+- id: leaktor
+  name: Leaktor Secrets Scanner
+  description: Scan for leaked secrets, API keys, and credentials
+  entry: leaktor scan --fail-on-found --git-history=false --min-confidence 0.7
+  language: system
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+
+- id: leaktor-staged
+  name: Leaktor Secrets Scanner (staged files)
+  description: Scan staged files for leaked secrets via stdin
+  entry: bash -c 'git diff --cached --diff-filter=ACM --name-only -z | xargs -0 cat 2>/dev/null | leaktor scan --stdin --fail-on-found --min-confidence 0.7'
+  language: system
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]

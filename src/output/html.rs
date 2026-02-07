@@ -271,7 +271,7 @@ impl HtmlOutput {
 </head>
 <body>
     <div class="container">
-        <h1>🔒 Leaktor Security Scan</h1>
+        <h1>Leaktor Security Scan</h1>
         <p class="subtitle">Secrets Detection Report</p>
 "#);
 
@@ -345,7 +345,7 @@ impl HtmlOutput {
         // Add search and filter UI
         html.push_str(r#"
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="🔍 Search findings by file, type, or content...">
+            <input type="text" id="searchInput" placeholder="Search findings by file, type, or content...">
         </div>
         <div class="filter-buttons">
             <button class="filter-btn active" data-filter="all">All</button>
@@ -373,13 +373,13 @@ impl HtmlOutput {
             };
 
             let validated_badge = match finding.secret.validated {
-                Some(true) => "<span class='validated'>✓ VALIDATED</span>",
-                Some(false) => "<span class='not-validated'>✗ INVALID</span>",
+                Some(true) => "<span class='validated'>[OK] VALIDATED</span>",
+                Some(false) => "<span class='not-validated'>[X] INVALID</span>",
                 None => "",
             };
 
             let false_positive_badge = if finding.is_likely_false_positive() {
-                "<span class='false-positive-badge'>⚠ Likely False Positive</span>"
+                "<span class='false-positive-badge'>[!] Likely False Positive</span>"
             } else {
                 ""
             };

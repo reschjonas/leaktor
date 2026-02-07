@@ -5,7 +5,7 @@ pub mod output;
 pub mod scanners;
 pub mod validators;
 
-pub use config::{Config, IgnoreManager};
+pub use config::{Baseline, Config, IgnoreManager};
 pub use models::{Finding, Secret, SecretType, Severity};
 pub use output::{ConsoleOutput, HtmlOutput, JsonOutput, OutputFormatter, SarifOutput};
-pub use scanners::{FilesystemScanner, GitScanner};
+pub use scanners::{FilesystemScanner, GitScanner, StdinScanner};

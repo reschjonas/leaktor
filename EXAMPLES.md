@@ -49,7 +49,7 @@ leaktor scan
 **Output:**
 ```
 ╔═══════════════════════════════════════════════╗
-║           🔒 LEAKTOR SECURITY SCAN            ║
+║            LEAKTOR SECURITY SCAN              ║
 ╚═══════════════════════════════════════════════╝
 
 Summary
@@ -61,7 +61,7 @@ Total Findings: 3
 
 Findings
 
-[1] 🔴 AWS Access Key [CRITICAL]
+[1] [CRITICAL] AWS Access Key [CRITICAL]
   Location: src/config.rs:42
   Confidence: 95%
   ...
@@ -71,7 +71,7 @@ Findings
 ```bash
 leaktor scan --format json --output results.json
 ```
-Perfect for parsing and automation.
+Useful for parsing and automation.
 
 ### SARIF Format (for CI/CD)
 ```bash
@@ -83,7 +83,7 @@ Compatible with GitHub Code Scanning and other security tools.
 ```bash
 leaktor scan --format html --output report.html
 ```
-Beautiful, self-contained report for sharing with team.
+Self-contained report for sharing with team.
 
 **Example:** Generate all formats at once:
 ```bash
@@ -146,18 +146,18 @@ Exits with code 1 if any secrets are detected.
 leaktor scan --validate
 ```
 **Checks if secrets are active:**
-- AWS keys → Makes AWS API call
-- GitHub tokens → Checks GitHub API
-- Other services → HTTP validation where possible
+- AWS keys -- Makes AWS API call
+- GitHub tokens -- Checks GitHub API
+- Other services -- HTTP validation where possible
 
 **Example output:**
 ```
-[1] 🔴 AWS Access Key [CRITICAL]
-  Status: ✓ VALIDATED (Active!)
+[1] [CRITICAL] AWS Access Key [CRITICAL]
+  Status: [OK] VALIDATED (Active!)
   Location: config/prod.env:12
 ```
 
-⚠️ **Note:** Validation makes API calls. Use responsibly and only when authorized.
+**Note:** Validation makes API calls. Use responsibly and only when authorized.
 
 ---
 
@@ -374,17 +374,17 @@ This creates `.git/hooks/pre-commit`:
 #!/bin/sh
 # Leaktor pre-commit hook
 
-echo "🔒 Running Leaktor security scan..."
+echo "Running Leaktor security scan..."
 
 leaktor scan --fail-on-found --format console
 
 if [ $? -ne 0 ]; then
-    echo "❌ Secrets detected! Commit aborted."
+    echo "Secrets detected. Commit aborted."
     echo "   Review the findings above or use 'git commit --no-verify' to bypass."
     exit 1
 fi
 
-echo "✓ No secrets detected"
+echo "No secrets detected."
 exit 0
 ```
 
@@ -411,7 +411,7 @@ leaktor scan \
 
 # If exit code is 0, safe to deploy
 if [ $? -eq 0 ]; then
-    echo "✓ Security scan passed. Deploying..."
+    echo "Security scan passed. Deploying..."
     ./deploy.sh
 fi
 ```
@@ -588,4 +588,4 @@ leaktor init --help
 
 ---
 
-**Happy Secret Hunting!**
+---

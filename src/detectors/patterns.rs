@@ -489,6 +489,563 @@ lazy_static! {
         },
 
         // ══════════════════════════════════════════════
+        // Additional Services (new)
+        // ══════════════════════════════════════════════
+
+        // PagerDuty
+        Pattern {
+            name: SecretType::PagerDutyApiKey,
+            regex: Regex::new(r#"(?i)pagerduty.{0,20}['"]([A-Za-z0-9+/=]{20})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.85,
+        },
+        // Jira / Atlassian API token
+        Pattern {
+            name: SecretType::JiraApiToken,
+            regex: Regex::new(r#"(?i)(?:jira|atlassian|confluence).{0,20}['"]([A-Za-z0-9]{24,})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Bitbucket App Password (base64-like 18+ chars with context)
+        Pattern {
+            name: SecretType::BitbucketAppPassword,
+            regex: Regex::new(r#"(?i)bitbucket.{0,20}['"]([A-Za-z0-9]{18,})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Terraform Cloud
+        Pattern {
+            name: SecretType::TerraformCloudToken,
+            regex: Regex::new(r"[a-zA-Z0-9]{14}\.atlasv1\.[a-zA-Z0-9\-_]{60,}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        // Pulumi
+        Pattern {
+            name: SecretType::PulumiAccessToken,
+            regex: Regex::new(r"pul-[a-f0-9]{40}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        // Fastly
+        Pattern {
+            name: SecretType::FastlyApiToken,
+            regex: Regex::new(r#"(?i)fastly.{0,20}['"]([A-Za-z0-9_-]{32})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.85,
+        },
+        // LaunchDarkly
+        Pattern {
+            name: SecretType::LaunchDarklyKey,
+            regex: Regex::new(r"sdk-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Mapbox
+        Pattern {
+            name: SecretType::MapboxToken,
+            regex: Regex::new(r"sk\.eyJ1[A-Za-z0-9_-]{50,}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        Pattern {
+            name: SecretType::MapboxToken,
+            regex: Regex::new(r"pk\.eyJ1[A-Za-z0-9_-]{50,}").unwrap(),
+            severity: Severity::Medium,
+            confidence_base: 0.90,
+        },
+        // Doppler
+        Pattern {
+            name: SecretType::DopplerToken,
+            regex: Regex::new(r"dp\.(?:ct|st|sa|scim)\.[a-zA-Z0-9]{40,}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        // Netlify PAT
+        Pattern {
+            name: SecretType::NetlifyPat,
+            regex: Regex::new(r"nfp_[A-Za-z0-9]{40,}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Fly.io
+        Pattern {
+            name: SecretType::FlyAccessToken,
+            regex: Regex::new(r"FlyV1\s+fm2_[A-Za-z0-9_-]{40,}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Confluent Cloud
+        Pattern {
+            name: SecretType::ConfluentApiKey,
+            regex: Regex::new(r#"(?i)confluent.{0,20}['"]([A-Za-z0-9]{16})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Databricks
+        Pattern {
+            name: SecretType::DatabricksToken,
+            regex: Regex::new(r"dapi[a-f0-9]{32}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.95,
+        },
+        // Sumo Logic
+        Pattern {
+            name: SecretType::SumoLogicKey,
+            regex: Regex::new(r#"(?i)sumologic.{0,20}['"]([A-Za-z0-9]{64})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.85,
+        },
+        // PostHog
+        Pattern {
+            name: SecretType::PosthogApiKey,
+            regex: Regex::new(r"phx_[A-Za-z0-9]{40,}").unwrap(),
+            severity: Severity::Medium,
+            confidence_base: 0.90,
+        },
+        Pattern {
+            name: SecretType::PosthogApiKey,
+            regex: Regex::new(r"phc_[A-Za-z0-9]{40,}").unwrap(),
+            severity: Severity::Low,
+            confidence_base: 0.85,
+        },
+        // Segment
+        Pattern {
+            name: SecretType::SegmentWriteKey,
+            regex: Regex::new(r#"(?i)segment.{0,20}['"]([A-Za-z0-9]{32})['"]"#).unwrap(),
+            severity: Severity::Medium,
+            confidence_base: 0.80,
+        },
+        // Plaid
+        Pattern {
+            name: SecretType::PlaidClientSecret,
+            regex: Regex::new(r#"(?i)plaid.{0,20}['"]([a-f0-9]{30})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.85,
+        },
+
+        // ══════════════════════════════════════════════
+        // Tier 3 Expansion - Additional Services
+        // ══════════════════════════════════════════════
+
+        // 1Password
+        Pattern {
+            name: SecretType::OnePasswordSecretKey,
+            regex: Regex::new(r"A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        Pattern {
+            name: SecretType::OnePasswordServiceToken,
+            regex: Regex::new(r"ops_eyJ[a-zA-Z0-9+/]{250,}={0,3}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        // Adobe
+        Pattern {
+            name: SecretType::AdobeClientSecret,
+            regex: Regex::new(r"(?i)p8e-[a-z0-9]{32}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Age
+        Pattern {
+            name: SecretType::AgeSecretKey,
+            regex: Regex::new(r"AGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{58}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.99,
+        },
+        // Alibaba
+        Pattern {
+            name: SecretType::AlibabaAccessKey,
+            regex: Regex::new(r"LTAI[a-zA-Z0-9]{20}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.95,
+        },
+        Pattern {
+            name: SecretType::AlibabaSecretKey,
+            regex: Regex::new(r#"(?i)alibaba.{0,20}['"]([a-z0-9]{30})['"]"#).unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.85,
+        },
+        // Artifactory
+        Pattern {
+            name: SecretType::ArtifactoryApiKey,
+            regex: Regex::new(r"AKCp[A-Za-z0-9]{69}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        Pattern {
+            name: SecretType::ArtifactoryReferenceToken,
+            regex: Regex::new(r"cmVmd[A-Za-z0-9]{59}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.95,
+        },
+        // Asana
+        Pattern {
+            name: SecretType::AsanaSecret,
+            regex: Regex::new(r#"(?i)asana.{0,20}['"]([a-z0-9]{32})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Azure AD Client Secret
+        Pattern {
+            name: SecretType::AzureAdClientSecret,
+            regex: Regex::new(r"[a-zA-Z0-9_~.]{3}\dQ~[a-zA-Z0-9_~.-]{31,34}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.90,
+        },
+        // Clojars
+        Pattern {
+            name: SecretType::ClojarsApiToken,
+            regex: Regex::new(r"(?i)CLOJARS_[a-z0-9]{60}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.98,
+        },
+        // Codecov
+        Pattern {
+            name: SecretType::CodecovAccessToken,
+            regex: Regex::new(r#"(?i)codecov.{0,20}['"]([a-z0-9]{32})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Coinbase
+        Pattern {
+            name: SecretType::CoinbaseAccessToken,
+            regex: Regex::new(r#"(?i)coinbase.{0,20}['"]([a-z0-9_\-]{64})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Contentful
+        Pattern {
+            name: SecretType::ContentfulApiToken,
+            regex: Regex::new(r#"(?i)contentful.{0,20}['"]([a-z0-9=_\-]{43})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.85,
+        },
+        // Dropbox
+        Pattern {
+            name: SecretType::DropboxApiToken,
+            regex: Regex::new(r#"(?i)dropbox.{0,20}['"]([a-z0-9]{15})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        Pattern {
+            name: SecretType::DropboxLongLivedToken,
+            regex: Regex::new(r#"(?i)dropbox.{0,20}['"]([a-z0-9]{11}AAAAAAAAAA[a-z0-9\-_=]{43})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.90,
+        },
+        Pattern {
+            name: SecretType::DropboxShortLivedToken,
+            regex: Regex::new(r"sl\.[a-zA-Z0-9\-=_]{135,}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Duffel
+        Pattern {
+            name: SecretType::DuffelApiToken,
+            regex: Regex::new(r"duffel_(?:test|live)_[a-zA-Z0-9_\-=]{43}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.98,
+        },
+        // Dynatrace
+        Pattern {
+            name: SecretType::DynatraceApiToken,
+            regex: Regex::new(r"dt0c01\.[a-zA-Z0-9]{24}\.[a-z0-9]{64}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        // EasyPost
+        Pattern {
+            name: SecretType::EasyPostApiToken,
+            regex: Regex::new(r"EZAK[a-zA-Z0-9]{54}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        Pattern {
+            name: SecretType::EasyPostTestApiToken,
+            regex: Regex::new(r"EZTK[a-zA-Z0-9]{54}").unwrap(),
+            severity: Severity::Medium,
+            confidence_base: 0.90,
+        },
+        // Facebook
+        Pattern {
+            name: SecretType::FacebookAccessToken,
+            regex: Regex::new(r"EAA[MC][a-zA-Z0-9]{100,}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.90,
+        },
+        Pattern {
+            name: SecretType::FacebookPageAccessToken,
+            regex: Regex::new(r#"(?i)facebook.{0,20}['"]([a-f0-9]{32})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Flutterwave
+        Pattern {
+            name: SecretType::FlutterwaveSecretKey,
+            regex: Regex::new(r"FLWSECK_TEST-[a-hA-H0-9]{12}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Frame.io
+        Pattern {
+            name: SecretType::FrameIoApiToken,
+            regex: Regex::new(r"fio-u-[a-zA-Z0-9\-_=]{64}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // FreshBooks
+        Pattern {
+            name: SecretType::FreshbooksAccessToken,
+            regex: Regex::new(r#"(?i)freshbooks.{0,20}['"]([a-z0-9]{64})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // GitHub App Token & Fine-Grained PAT
+        Pattern {
+            name: SecretType::GitHubAppToken,
+            regex: Regex::new(r"ghs_[0-9a-zA-Z]{30,40}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        Pattern {
+            name: SecretType::GitHubFineGrainedPat,
+            regex: Regex::new(r"github_pat_[0-9a-zA-Z_]{82}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.99,
+        },
+        // Google OAuth
+        Pattern {
+            name: SecretType::GoogleOAuthClientSecret,
+            regex: Regex::new(r"GOCSPX-[a-zA-Z0-9_\-]{28}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        // Intercom
+        Pattern {
+            name: SecretType::IntercomAccessToken,
+            regex: Regex::new(r#"(?i)intercom.{0,20}['"]([a-z0-9=_\-]{60})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Kraken
+        Pattern {
+            name: SecretType::KrakenAccessToken,
+            regex: Regex::new(r#"(?i)kraken.{0,20}['"]([a-z0-9/+=]{80,})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Lob
+        Pattern {
+            name: SecretType::LobApiKey,
+            regex: Regex::new(r#"(?i)lob.{0,20}['"]((live|test)_[a-f0-9]{35})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.85,
+        },
+        // MessageBird
+        Pattern {
+            name: SecretType::MessageBirdApiKey,
+            regex: Regex::new(r#"(?i)messagebird.{0,20}['"]([a-z0-9]{25})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // New Relic Browser
+        Pattern {
+            name: SecretType::NewRelicBrowserApiKey,
+            regex: Regex::new(r"NRJS-[a-f0-9]{19}").unwrap(),
+            severity: Severity::Medium,
+            confidence_base: 0.95,
+        },
+        // NY Times
+        Pattern {
+            name: SecretType::NytimesAccessToken,
+            regex: Regex::new(r#"(?i)nytimes.{0,20}['"]([a-z0-9]{32})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Postman
+        Pattern {
+            name: SecretType::PostmanApiToken,
+            regex: Regex::new(r"PMAK-[a-f0-9]{24}-[a-f0-9]{34}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.98,
+        },
+        // Private Keys (PKCS8, DSA)
+        Pattern {
+            name: SecretType::Pkcs8PrivateKey,
+            regex: Regex::new(r"-----BEGIN PRIVATE KEY-----").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.99,
+        },
+        Pattern {
+            name: SecretType::DsaPrivateKey,
+            regex: Regex::new(r"-----BEGIN DSA PRIVATE KEY-----").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.99,
+        },
+        // RapidAPI
+        Pattern {
+            name: SecretType::RapidApiKey,
+            regex: Regex::new(r#"(?i)rapid.{0,20}['"]([a-z0-9]{50})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // ReadMe
+        Pattern {
+            name: SecretType::ReadmeApiKey,
+            regex: Regex::new(r"rdme_[a-z0-9]{70}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Scalingo
+        Pattern {
+            name: SecretType::ScalingoApiToken,
+            regex: Regex::new(r"tk-us-[a-zA-Z0-9\-_]{48}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Sourcegraph
+        Pattern {
+            name: SecretType::SourcegraphAccessToken,
+            regex: Regex::new(r"sgp_[a-fA-F0-9]{40,64}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Tailscale
+        Pattern {
+            name: SecretType::TailscaleApiKey,
+            regex: Regex::new(r"tskey-[a-zA-Z0-9\-]{20,}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Tencent
+        Pattern {
+            name: SecretType::TencentSecretId,
+            regex: Regex::new(r"AKID[a-zA-Z0-9]{32}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.95,
+        },
+        // Trello
+        Pattern {
+            name: SecretType::TrelloAccessToken,
+            regex: Regex::new(r#"(?i)trello.{0,20}['"]([a-z0-9]{32})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Twitch
+        Pattern {
+            name: SecretType::TwitchApiToken,
+            regex: Regex::new(r#"(?i)twitch.{0,20}['"]([a-z0-9]{30})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Twitter
+        Pattern {
+            name: SecretType::TwitterApiKey,
+            regex: Regex::new(r#"(?i)twitter.{0,20}['"]([a-zA-Z0-9]{25})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        Pattern {
+            name: SecretType::TwitterAccessToken,
+            regex: Regex::new(r#"(?i)twitter.{0,20}['"]([0-9]+-[a-zA-Z0-9]{40})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.85,
+        },
+        // Typeform
+        Pattern {
+            name: SecretType::TypeformApiToken,
+            regex: Regex::new(r"tfp_[a-z0-9_\-]{40,}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Vault Batch Token
+        Pattern {
+            name: SecretType::VaultBatchToken,
+            regex: Regex::new(r"hvb\.[A-Za-z0-9_\-]{130,}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        // Yandex
+        Pattern {
+            name: SecretType::YandexApiKey,
+            regex: Regex::new(r"AQVN[a-zA-Z0-9_\-]{35,}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.95,
+        },
+        Pattern {
+            name: SecretType::YandexAwsAccessToken,
+            regex: Regex::new(r"YC[a-zA-Z0-9_\-]{38}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.90,
+        },
+        // Zendesk
+        Pattern {
+            name: SecretType::ZendeskSecretKey,
+            regex: Regex::new(r#"(?i)zendesk.{0,20}['"]([a-z0-9]{40})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Beamer
+        Pattern {
+            name: SecretType::BeamerApiToken,
+            regex: Regex::new(r#"(?i)beamer.{0,20}['"]b_[a-z0-9=_\-]{44}['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.85,
+        },
+        // Bitwarden
+        Pattern {
+            name: SecretType::BitwardenApiKey,
+            regex: Regex::new(r#"(?i)bitwarden.{0,20}['"]([a-z0-9]{32})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // PlanetScale Password
+        Pattern {
+            name: SecretType::PlanetScalePassword,
+            regex: Regex::new(r"pscale_pw_[A-Za-z0-9_]{30,}").unwrap(),
+            severity: Severity::Critical,
+            confidence_base: 0.98,
+        },
+        // Infracost
+        Pattern {
+            name: SecretType::InfracostApiKey,
+            regex: Regex::new(r"ico-[a-zA-Z0-9]{32}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Prefect
+        Pattern {
+            name: SecretType::PrefectApiToken,
+            regex: Regex::new(r"pnu_[a-z0-9]{36}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.95,
+        },
+        // Railway
+        Pattern {
+            name: SecretType::RailwayApiToken,
+            regex: Regex::new(r#"(?i)railway.{0,20}['"]([a-f0-9]{36})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Neon
+        Pattern {
+            name: SecretType::NeonApiKey,
+            regex: Regex::new(r#"(?i)neon.{0,20}['"]([a-z0-9]{60,})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+        // Turborepo
+        Pattern {
+            name: SecretType::TurborepoAccessToken,
+            regex: Regex::new(r#"(?i)turbo.{0,20}['"]([a-zA-Z0-9]{36})['"]"#).unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.80,
+        },
+
+        // ══════════════════════════════════════════════
         // Generic API Key patterns (keep last as fallback)
         // ══════════════════════════════════════════════
         Pattern {
@@ -528,11 +1085,51 @@ pub struct PatternMatch {
     pub column_end: usize,
 }
 
-pub struct PatternDetector;
+pub struct PatternDetector {
+    /// Extra patterns loaded from `.leaktor.toml` [[custom_patterns]].
+    custom_patterns: Vec<Pattern>,
+}
 
 impl PatternDetector {
     pub fn new() -> Self {
-        Self
+        Self {
+            custom_patterns: Vec::new(),
+        }
+    }
+
+    /// Create a detector with additional user-defined patterns from config.
+    pub fn with_custom_patterns(
+        custom: &[crate::config::settings::CustomPattern],
+    ) -> Self {
+        let mut custom_patterns = Vec::new();
+
+        for cp in custom {
+            let severity = match cp.severity.to_uppercase().as_str() {
+                "CRITICAL" => Severity::Critical,
+                "HIGH" => Severity::High,
+                "MEDIUM" => Severity::Medium,
+                _ => Severity::Low,
+            };
+
+            match Regex::new(&cp.regex) {
+                Ok(re) => {
+                    custom_patterns.push(Pattern {
+                        name: SecretType::Custom(cp.name.clone()),
+                        regex: re,
+                        severity,
+                        confidence_base: cp.confidence.clamp(0.0, 1.0),
+                    });
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[!] Skipping invalid custom pattern \"{}\": {}",
+                        cp.name, e
+                    );
+                }
+            }
+        }
+
+        Self { custom_patterns }
     }
 
     /// Scan a line of text for secrets, returning all matches with positions
@@ -548,7 +1145,10 @@ impl PatternDetector {
         let mut matches = Vec::new();
         let mut seen_ranges: Vec<(usize, usize)> = Vec::new();
 
-        for pattern in PATTERNS.iter() {
+        // Chain built-in patterns with custom patterns
+        let all_patterns = PATTERNS.iter().chain(self.custom_patterns.iter());
+
+        for pattern in all_patterns {
             // Use find_iter to find ALL matches, not just the first
             for mat in pattern.regex.find_iter(line) {
                 let value = mat.as_str().to_string();

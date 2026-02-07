@@ -11,6 +11,8 @@ pub struct FilesystemScanner {
     entropy_threshold: f64,
     max_file_size: u64,
     respect_gitignore: bool,
+    include_deps: bool,
+    custom_patterns: Vec<crate::config::settings::CustomPattern>,
 }
 
 impl FilesystemScanner {
@@ -20,7 +22,14 @@ impl FilesystemScanner {
             entropy_threshold: 3.5,
             max_file_size: 1024 * 1024, // 1MB
             respect_gitignore: true,
+            include_deps: false,
+            custom_patterns: Vec::new(),
         }
+    }
+
+    pub fn with_custom_patterns(mut self, patterns: Vec<crate::config::settings::CustomPattern>) -> Self {
+        self.custom_patterns = patterns;
+        self
     }
 
     pub fn with_entropy_threshold(mut self, threshold: f64) -> Self {
@@ -38,13 +47,26 @@ impl FilesystemScanner {
         self
     }
 
+    /// Include dependency directories (node_modules, vendor, .venv, etc.)
+    pub fn with_include_deps(mut self, include: bool) -> Self {
+        self.include_deps = include;
+        self
+    }
+
     pub fn scan(&self) -> Result<Vec<Finding>> {
         let files = self.collect_files()?;
+
+        // Pre-build the detector (with custom patterns) for all threads to clone
+        let detector = if self.custom_patterns.is_empty() {
+            PatternDetector::new()
+        } else {
+            PatternDetector::with_custom_patterns(&self.custom_patterns)
+        };
 
         // Scan files in parallel using rayon
         let findings: Vec<Finding> = files
             .par_iter()
-            .flat_map(|file_path| self.scan_file(file_path).unwrap_or_default())
+            .flat_map(|file_path| self.scan_file(file_path, &detector).unwrap_or_default())
             .collect();
 
         Ok(findings)
@@ -53,46 +75,77 @@ impl FilesystemScanner {
     fn collect_files(&self) -> Result<Vec<PathBuf>> {
         let mut files = Vec::new();
 
-        let walker = WalkBuilder::new(&self.root_path)
-            .git_ignore(self.respect_gitignore)
-            .git_global(self.respect_gitignore)
-            .git_exclude(self.respect_gitignore)
-            .hidden(false)
-            .build();
+        if self.include_deps {
+            // When scanning deps, use walkdir directly to bypass all gitignore filtering.
+            // The `ignore` crate's WalkBuilder can filter node_modules/vendor via
+            // global rules or built-in heuristics, so we avoid it entirely.
+            for entry in walkdir::WalkDir::new(&self.root_path)
+                .into_iter()
+                .filter_entry(|e| {
+                    // Always skip .git directory itself
+                    let name = e.file_name().to_string_lossy();
+                    name != ".git"
+                })
+            {
+                let entry = entry?;
+                let path = entry.path();
 
-        for entry in walker {
-            let entry = entry?;
-            let path = entry.path();
-
-            if !path.is_file() {
-                continue;
-            }
-
-            // Check file size
-            if let Ok(metadata) = fs::metadata(path) {
-                if metadata.len() > self.max_file_size {
+                if !path.is_file() {
                     continue;
                 }
-            }
 
-            // Skip binary files (basic check)
-            if self.is_likely_binary(path) {
-                continue;
-            }
+                if let Ok(metadata) = fs::metadata(path) {
+                    if metadata.len() > self.max_file_size {
+                        continue;
+                    }
+                }
 
-            // Skip vendor directories
-            let file_context = ContextAnalyzer::analyze_file(path);
-            if file_context.is_vendor {
-                continue;
-            }
+                if self.is_likely_binary(path) {
+                    continue;
+                }
 
-            files.push(path.to_path_buf());
+                // Don't skip vendor directories (that's the whole point of --include-deps)
+                files.push(path.to_path_buf());
+            }
+        } else {
+            let walker = WalkBuilder::new(&self.root_path)
+                .git_ignore(self.respect_gitignore)
+                .git_global(self.respect_gitignore)
+                .git_exclude(self.respect_gitignore)
+                .hidden(false)
+                .build();
+
+            for entry in walker {
+                let entry = entry?;
+                let path = entry.path();
+
+                if !path.is_file() {
+                    continue;
+                }
+
+                if let Ok(metadata) = fs::metadata(path) {
+                    if metadata.len() > self.max_file_size {
+                        continue;
+                    }
+                }
+
+                if self.is_likely_binary(path) {
+                    continue;
+                }
+
+                let file_context = ContextAnalyzer::analyze_file(path);
+                if file_context.is_vendor {
+                    continue;
+                }
+
+                files.push(path.to_path_buf());
+            }
         }
 
         Ok(files)
     }
 
-    fn scan_file(&self, file_path: &PathBuf) -> Result<Vec<Finding>> {
+    fn scan_file(&self, file_path: &PathBuf, detector: &PatternDetector) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
 
         // Skip files that can't be read as UTF-8 (likely binary)
@@ -106,8 +159,20 @@ impl FilesystemScanner {
             return Ok(findings);
         }
 
+        // Multi-format scanning: decode structured files (K8s secrets, Terraform state, etc.)
+        if let Some(fmt) = super::multiformat::detect_format(file_path, &content) {
+            if let Ok(extra) = super::multiformat::scan_structured_file(
+                file_path,
+                &content,
+                fmt,
+                detector,
+                self.entropy_threshold,
+            ) {
+                findings.extend(extra);
+            }
+        }
+
         let lines: Vec<&str> = content.lines().collect();
-        let detector = PatternDetector::new();
         let file_context = ContextAnalyzer::analyze_file(file_path);
 
         for (line_num, line) in lines.iter().enumerate() {

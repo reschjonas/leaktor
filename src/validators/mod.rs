@@ -1,12 +1,24 @@
+pub mod anthropic;
 pub mod aws;
+pub mod datadog;
 pub mod github;
+pub mod gitlab;
 pub mod http;
+pub mod huggingface;
+pub mod openai;
+pub mod sendgrid;
 pub mod slack;
 pub mod stripe;
 
+pub use anthropic::AnthropicValidator;
 pub use aws::AwsValidator;
+pub use datadog::DatadogValidator;
 pub use github::GitHubValidator;
+pub use gitlab::GitLabValidator;
 pub use http::HttpValidator;
+pub use huggingface::HuggingFaceValidator;
+pub use openai::OpenAiValidator;
+pub use sendgrid::SendGridValidator;
 pub use slack::SlackValidator;
 pub use stripe::StripeValidator;
 
@@ -20,14 +32,25 @@ pub trait Validator {
     fn supports(&self, secret_type: &SecretType) -> bool;
 }
 
-/// Validate a secret using the appropriate validator
-pub async fn validate_secret(secret: &mut Secret) -> Result<()> {
-    let validators: Vec<Box<dyn Validator + Send + Sync>> = vec![
+/// Create the full list of all available validators
+fn all_validators() -> Vec<Box<dyn Validator + Send + Sync>> {
+    vec![
         Box::new(AwsValidator::new()),
         Box::new(GitHubValidator::new()),
+        Box::new(GitLabValidator::new()),
         Box::new(SlackValidator::new()),
         Box::new(StripeValidator::new()),
-    ];
+        Box::new(OpenAiValidator::new()),
+        Box::new(AnthropicValidator::new()),
+        Box::new(SendGridValidator::new()),
+        Box::new(DatadogValidator::new()),
+        Box::new(HuggingFaceValidator::new()),
+    ]
+}
+
+/// Validate a secret using the appropriate validator
+pub async fn validate_secret(secret: &mut Secret) -> Result<()> {
+    let validators = all_validators();
 
     for validator in validators {
         if validator.supports(&secret.secret_type) {
@@ -51,12 +74,7 @@ pub async fn validate_secret(secret: &mut Secret) -> Result<()> {
 pub async fn validate_secrets_parallel(secrets: &mut [Secret]) -> Result<()> {
     use tokio::task::JoinSet;
 
-    let validators: Vec<Box<dyn Validator + Send + Sync>> = vec![
-        Box::new(AwsValidator::new()),
-        Box::new(GitHubValidator::new()),
-        Box::new(SlackValidator::new()),
-        Box::new(StripeValidator::new()),
-    ];
+    let validators = all_validators();
 
     // Build a list of (index, secret_clone) pairs that have a matching validator
     let mut tasks: JoinSet<(usize, Option<bool>)> = JoinSet::new();
@@ -78,12 +96,7 @@ pub async fn validate_secrets_parallel(secrets: &mut [Secret]) -> Result<()> {
         let secret_clone = secret.clone();
         tasks.spawn(async move {
             // Re-create validators inside the task (they're cheap)
-            let validators: Vec<Box<dyn Validator + Send + Sync>> = vec![
-                Box::new(AwsValidator::new()),
-                Box::new(GitHubValidator::new()),
-                Box::new(SlackValidator::new()),
-                Box::new(StripeValidator::new()),
-            ];
+            let validators = all_validators();
 
             for validator in &validators {
                 if validator.supports(&secret_clone.secret_type) {

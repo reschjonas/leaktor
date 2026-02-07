@@ -260,13 +260,19 @@ impl ContextAnalyzer {
             return false;
         }
 
+        // Strip surrounding quotes for analysis
+        let stripped = text.trim_matches(|c| c == '"' || c == '\'');
+
         // Check for strings with the same character repeated
-        let chars: Vec<char> = text.chars().collect();
+        // Exclude structural chars (dashes in PEM headers, equals in base64, dots, underscores)
+        let structural_chars = ['-', '=', '.', '_', ' '];
+        let chars: Vec<char> = stripped.chars().collect();
         let mut same_char_count = 1;
         for i in 1..chars.len() {
-            if chars[i] == chars[i - 1] {
+            if chars[i] == chars[i - 1] && !structural_chars.contains(&chars[i]) {
                 same_char_count += 1;
-                if same_char_count >= 5 {
+                // Require a longer run (8+) to reduce false positives on real secrets
+                if same_char_count >= 8 {
                     return true;
                 }
             } else {
@@ -275,16 +281,19 @@ impl ContextAnalyzer {
         }
 
         // Check for repeated short patterns like "123412341234"
-        if text.len() >= 12 {
+        // Only flag if the repeated pattern covers most of the string
+        if stripped.len() >= 12 {
             for pattern_len in 2..=4 {
-                if let Some(pattern) = text.get(0..pattern_len) {
+                if let Some(pattern) = stripped.get(0..pattern_len) {
                     let mut matches = 0;
-                    for i in (pattern_len..text.len()).step_by(pattern_len) {
-                        if text.get(i..i + pattern_len) == Some(pattern) {
+                    for i in (pattern_len..stripped.len()).step_by(pattern_len) {
+                        if stripped.get(i..i + pattern_len) == Some(pattern) {
                             matches += 1;
                         }
                     }
-                    if matches >= 2 {
+                    // Require repeated pattern to cover at least 60% of the string
+                    let coverage = (matches + 1) * pattern_len;
+                    if matches >= 2 && coverage * 100 / stripped.len() >= 60 {
                         return true;
                     }
                 }
