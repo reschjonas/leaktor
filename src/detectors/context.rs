@@ -20,17 +20,26 @@ impl ContextAnalyzer {
         let is_example = Self::is_example(&path_str);
         let is_vendor = Self::is_vendor(&path_str);
 
+        // For .env files, use "env" as the virtual extension
+        let file_name = file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        let effective_extension = if file_name == ".env" || file_name.starts_with(".env.") {
+            Some("env".to_string())
+        } else if extension.is_empty() {
+            None
+        } else {
+            Some(extension)
+        };
+
         FileContext {
             is_test_file,
             is_config_file,
             is_documentation,
             is_example,
             is_vendor,
-            file_extension: if extension.is_empty() {
-                None
-            } else {
-                Some(extension)
-            },
+            file_extension: effective_extension,
         }
     }
 
@@ -63,10 +72,17 @@ impl ContextAnalyzer {
     }
 
     fn is_config_file(path: &str, extension: &str) -> bool {
+        let filename = Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+
         matches!(
             extension,
             "yml" | "yaml" | "toml" | "ini" | "conf" | "config" | "properties" | "env" | "json"
         ) || path.contains("/.env")
+            || filename == ".env"
+            || filename.starts_with(".env.")  // .env.local, .env.production, etc.
             || path.contains("config")
             || path.ends_with(".npmrc")
             || path.ends_with(".dockerignore")
@@ -74,7 +90,10 @@ impl ContextAnalyzer {
     }
 
     fn is_documentation(path: &str, extension: &str) -> bool {
-        matches!(extension, "md" | "markdown" | "txt" | "rst" | "adoc")
+        // NOTE: .txt is intentionally excluded -- .txt files are often configs,
+        // notes, or data files containing real secrets, not documentation.
+        // Classifying them as documentation would silently downgrade severity.
+        matches!(extension, "md" | "markdown" | "rst" | "adoc")
             || path.contains("/docs/")
             || path.contains("/doc/")
             || path.contains("readme")

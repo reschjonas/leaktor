@@ -102,52 +102,36 @@ impl IgnoreManager {
             || line.contains("@leaktor-ignore")
     }
 
-    /// Simple pattern matching (basic wildcard support)
+    /// Pattern matching — delegates to the proper glob implementation in
+    /// `settings::glob_match` so that `*`, `**`, `?` and negation all work
+    /// identically in `.leaktorignore` and config allowlists.
     fn matches_pattern(&self, text: &str, pattern: &str) -> bool {
-        if pattern.contains('*') {
-            // Simple wildcard matching
-            let parts: Vec<&str> = pattern.split('*').collect();
-            if parts.is_empty() {
-                return false;
-            }
-
-            let mut pos = 0;
-            for (i, part) in parts.iter().enumerate() {
-                if i == 0 && !part.is_empty() {
-                    // First part must match the beginning
-                    if !text[pos..].starts_with(part) {
-                        return false;
-                    }
-                    pos += part.len();
-                } else if i == parts.len() - 1 && !part.is_empty() {
-                    // Last part must match the end
-                    return text.ends_with(part);
-                } else if !part.is_empty() {
-                    // Middle parts must exist somewhere
-                    if let Some(found_pos) = text[pos..].find(part) {
-                        pos += found_pos + part.len();
-                    } else {
-                        return false;
-                    }
-                }
-            }
-            true
-        } else {
-            // Exact match
-            text.contains(pattern)
-        }
+        crate::config::settings::glob_match(text, pattern)
     }
 
     /// Save ignore patterns to a file
     pub fn save_to_file(&self, path: &Path) -> Result<()> {
         let mut content = String::new();
         content.push_str("# Leaktor ignore patterns\n");
-        content.push_str("# Patterns support wildcards (*)\n");
+        content.push_str("# Supports: * (single segment), ** (multi-segment), ? (single char), !pat (negate)\n");
         content.push_str("# Lines starting with # are comments\n");
         content.push_str(
             "# Use fingerprint:<hash> or a bare 64-char hex hash to allowlist by fingerprint\n\n",
         );
 
+        // Default patterns to prevent scanning leaktor's own test data,
+        // common fixture / mock files, and build artefacts.
+        content.push_str("# Build artefacts\n");
+        content.push_str("**/target/**\n");
+        content.push_str("**/dist/**\n");
+        content.push_str("**/build/**\n\n");
+
+        content.push_str("# Test fixtures / mock data\n");
+        content.push_str("**/*fixture*/**\n");
+        content.push_str("**/*mock*/**\n");
+        content.push_str("**/testdata/**\n\n");
+
+        // User-defined patterns
         for pattern in &self.patterns {
             content.push_str(pattern);
             content.push('\n');

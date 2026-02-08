@@ -32,6 +32,8 @@ impl DatadogValidator {
                 Ok(body.get("valid").and_then(|v| v.as_bool()).unwrap_or(false))
             }
             403 => Ok(false),
+            429 => anyhow::bail!("429 Too Many Requests from api.datadoghq.com"),
+            s if s >= 500 => anyhow::bail!("Server error {} from api.datadoghq.com", s),
             _ => Ok(false),
         }
     }

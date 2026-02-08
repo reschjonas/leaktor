@@ -82,7 +82,13 @@ impl AwsValidator {
 
         // 200 = valid credentials
         // 403 = invalid/expired credentials
-        Ok(response.status().as_u16() == 200)
+        let status = response.status().as_u16();
+        match status {
+            200 => Ok(true),
+            429 => anyhow::bail!("429 Too Many Requests from sts.amazonaws.com"),
+            s if s >= 500 => anyhow::bail!("Server error {} from sts.amazonaws.com", s),
+            _ => Ok(false),
+        }
     }
 
     /// Basic format validation when we only have an access key (no secret key).

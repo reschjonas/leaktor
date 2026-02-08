@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">Leaktor</h1>
   <p align="center">
-    Secrets scanner for codebases and git history.
+    Secrets scanner for codebases, git history, S3 buckets, and Docker images.
     <br />
     Pattern matching &middot; Entropy analysis &middot; Live validation
     <br /><br />
@@ -25,18 +25,18 @@ Summary
 Total Findings: 3
   Critical: 2    High: 1
 
-[1] [CRITICAL] AWS Access Key [CRITICAL]
+[1] [CRITICAL] AWS Access Key
   Status: [OK] VALIDATED
   Location: src/config.rs:42
   Context:
     AWS_ACCESS_KEY_ID=AKIA...MPLE
 
-[2] [CRITICAL] GitHub Personal Access Token [CRITICAL]
+[2] [CRITICAL] GitHub Personal Access Token
   Location: .env:7
   Context:
     GITHUB_TOKEN=ghp_...a8f2
 
-[3] [HIGH] Stripe API Key [HIGH]
+[3] [HIGH] Stripe API Key
   Location: payments/billing.py:119
   Context:
     stripe.api_key = "sk_l...eK1P"
@@ -56,10 +56,14 @@ Scan completed in 0.04s | 312 files scanned | 3 findings
 - [Project setup (`leaktor init`)](#project-setup)
 - [Blast radius analysis (`leaktor trace`)](#blast-radius-analysis)
 - [Scan diffing (`leaktor diff`)](#scan-diffing)
+- [Remediation](#remediation)
+- [Webhook integration](#webhook-integration)
 - [Dependency scanning (`--include-deps`)](#dependency-scanning)
 - [Multi-format scanning](#multi-format-scanning)
+- [Multi-source scanning (S3, Docker)](#multi-source-scanning)
 - [CI/CD integration](#cicd-integration)
 - [Output formats](#output-formats)
+- [Performance](#performance)
 - [Contributing](#contributing)
 
 <br />
@@ -163,10 +167,12 @@ leaktor scan --update-baseline baseline.json
 | `--validate` | off | Check secrets against live APIs |
 | `--git-history <bool>` | `true` | Scan git commit history |
 | `--max-depth <n>` | all | Limit git commits scanned |
+| `--max-fs-depth <n>` | all | Limit filesystem recursion depth (0 = root only; does not apply to git history) |
 | `--entropy <f64>` | `3.5` | Shannon entropy threshold |
 | `--min-confidence <f64>` | `0.6` | Confidence cutoff (0.0 -- 1.0) |
 | `--exclude-tests` | off | Skip test files |
 | `--fail-on-found` | off | Non-zero exit on findings |
+| `-q, --quiet` | off | Suppress informational output (for scripting). With `--format console`, output is fully suppressed -- use exit code via `--fail-on-found` |
 | `-v, --verbose` | off | Confidence, entropy, commit metadata |
 | `--stdin` | off | Read from stdin instead of filesystem |
 | `--since-commit <hash>` | -- | Only scan commits after this hash |
@@ -178,11 +184,17 @@ leaktor scan --update-baseline baseline.json
 | `--include-deps` | off | Scan dependency dirs (node_modules, vendor, .venv) |
 
 ```bash
+# Multi-source scanning
+leaktor scan-s3 my-bucket              # Scan S3 bucket for secrets
+leaktor scan-docker myapp:latest       # Scan Docker image for secrets
+
 # Utility commands
-leaktor list              # Print all 146 supported secret types
+leaktor list              # Print all 888 supported secret types
 leaktor init              # Full project setup (config + hook + CI + baseline)
+leaktor init --format yaml  # Use YAML config instead of TOML
 leaktor config            # Generate .leaktor.toml
 leaktor install-hook      # Git pre-commit hook (staged files only)
+leaktor remediate scan.json # Generate remediation scripts from findings
 leaktor trace AKIAZ5...   # Blast radius analysis
 leaktor diff old.json new.json  # Compare scan results
 ```
@@ -191,7 +203,7 @@ leaktor diff old.json new.json  # Compare scan results
 
 ## Detection coverage
 
-146 secret types. 152 regex patterns. 10 live validators. Run `leaktor list` for the full list.
+888 secret types. 894 regex patterns. ~80 live-validated services (19 dedicated API validators + ~60 via ServiceValidator). Run `leaktor list` for the full list.
 
 | Category | Secrets |
 |:---------|:--------|
@@ -213,9 +225,11 @@ leaktor diff old.json new.json  # Compare scan results
 | **Encryption** | Age secret keys &middot; Artifactory API keys & reference tokens |
 | **Generic** | API key assignments &middot; password assignments &middot; bearer/access tokens &middot; passwords in URLs &middot; high-entropy strings |
 
-### Live validation (10 services)
+### Live validation (~80 services)
 
-When you pass `--validate`, Leaktor calls the provider's API to confirm whether a detected credential is actually active:
+When you pass `--validate`, Leaktor uses a three-tier validation architecture:
+
+**Tier 1 -- Dedicated API validators (19 services):**
 
 | Provider | Method |
 |:---------|:-------|
@@ -229,6 +243,19 @@ When you pass `--validate`, Leaktor calls the provider's API to confirm whether 
 | SendGrid | `/v3/scopes` endpoint |
 | Datadog | `/api/v1/validate` endpoint |
 | HuggingFace | `whoami-v2` endpoint |
+| DigitalOcean | `/v2/account` endpoint |
+| Twilio | `/Accounts` endpoint |
+| NPM | registry token validation |
+| Discord | `/users/@me` endpoint |
+| Telegram | `getMe` endpoint |
+| PyPI | token validation |
+| Shopify | Admin API validation |
+| Linear | GraphQL API validation |
+| New Relic | `/v2/users` endpoint |
+
+**Tier 2 -- ServiceValidator (~60 services):** Configuration-driven API validation for Cloudflare, Vercel, Notion, Airtable, Figma, CircleCI, HubSpot, Square, Mailgun, and many more.
+
+**Tier 3 -- FormatValidator (all types):** Universal format checks (prefix, length, character set) as a fallback for every secret type.
 
 Combine with `--only-verified` to see **only** secrets confirmed active -- useful for cutting noise in large repos:
 
@@ -250,7 +277,7 @@ leaktor scan --validate --only-verified
  Multi-format decode  (K8s Secrets base64, Terraform state, Docker Compose, CloudFormation)
         |
         v
- Pattern matching  (152 built-in + custom regexes, multi-match per line)
+ Pattern matching  (894 built-in + custom regexes, multi-match per line)
         |
         v
  Entropy analysis  (Shannon entropy on matched values)
@@ -265,7 +292,7 @@ leaktor scan --validate --only-verified
  Allowlist + Baseline  (type/path/value/severity rules, fingerprints, baseline)
         |
         v
- Validation  (opt-in: 10 providers, parallel, --only-verified)
+ Validation  (opt-in: ~80 providers, parallel, --only-verified)
         |
         v
  Report  (console / json / sarif / html)
@@ -297,11 +324,16 @@ max_file_size = 1048576       # bytes
 exclude_tests = false
 exclude_docs = false
 report_severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+# Rate limiting for API validation (--validate)
+max_concurrent_validations = 4   # max parallel API requests (0 = disable API validation)
+validation_delay_ms = 100        # min delay between requests to the same host
+validation_max_retries = 3       # retries on 429 Too Many Requests (exponential backoff)
 ```
 
 ### Custom patterns
 
-Define your own detection rules using Rust regex syntax. They run alongside the 152 built-in patterns:
+Define your own detection rules using Rust regex syntax. They run alongside the 894 built-in patterns:
 
 ```toml
 [[custom_patterns]]
@@ -395,7 +427,7 @@ This creates:
 
 | File | Purpose |
 |:-----|:--------|
-| `.leaktor.toml` | Configuration (patterns, thresholds, allowlists) |
+| `.leaktor.toml` or `.leaktor.yaml` | Configuration (patterns, thresholds, allowlists) |
 | `.leaktorignore` | Ignore patterns (files, fingerprints) |
 | `.git/hooks/pre-commit` | Pre-commit hook (auto-scan before commits) |
 | `.github/workflows/leaktor.yml` | GitHub Actions CI workflow |
@@ -406,6 +438,7 @@ Options:
 leaktor init --baseline          # Also create an initial baseline
 leaktor init --no-hook           # Skip pre-commit hook
 leaktor init --no-ci             # Skip GitHub Actions workflow
+leaktor init --format yaml       # Generate .leaktor.yaml instead of .leaktor.toml
 leaktor init /path/to/project    # Initialize a specific directory
 ```
 
@@ -484,6 +517,39 @@ Also supports JSON output for automation: `leaktor diff old.json new.json --form
 
 <br />
 
+## Remediation
+
+Generate remediation scripts from scan results to help rotate and clean up detected secrets:
+
+```bash
+# Generate a bash remediation script
+leaktor scan --format json -o findings.json
+leaktor remediate findings.json --format script -o fix.sh
+
+# Generate a markdown report for team review
+leaktor remediate findings.json --format markdown -o remediation.md
+```
+
+Each finding gets step-by-step instructions: rotate the credential, remove it from git history, and add prevention rules.
+
+<br />
+
+## Webhook integration
+
+Send scan results to external services (Slack, Teams, or any HTTP endpoint) for alerting:
+
+```bash
+# Send findings to a webhook endpoint
+leaktor scan --webhook-url https://hooks.slack.com/services/T.../B.../xxx
+
+# Works with any format
+leaktor scan --format json --webhook-url https://your-siem.example.com/api/events
+```
+
+The webhook sends a JSON POST with the scan summary and findings array.
+
+<br />
+
 ## Dependency scanning
 
 Scan secrets inside `node_modules/`, `vendor/`, `.venv/`, and other dependency directories that are normally skipped:
@@ -510,11 +576,72 @@ Leaktor automatically decodes and scans structured files:
 This happens automatically during `leaktor scan` -- no flags needed. Findings show the decoded context:
 
 ```
-[1] [CRITICAL] AWS Access Key [CRITICAL]
+[1] [CRITICAL] AWS Access Key
   Location: k8s/secret.yaml:9
   Context:
     K8s Secret .data.aws_access_key [base64 decoded]
     AKIA...TEST
+```
+
+<br />
+
+## Multi-source scanning
+
+Beyond local files and git repos, Leaktor can scan S3 buckets and Docker images directly. Both are compiled by default and can be disabled with `--no-default-features` (or selectively with `--features s3` / `--features docker`).
+
+### S3 buckets
+
+Scan objects in an S3 bucket using the standard AWS credential chain (environment variables, `~/.aws/credentials`, IAM roles).
+
+```bash
+# Scan all text objects in a bucket
+leaktor scan-s3 my-bucket
+
+# Scan only a specific prefix
+leaktor scan-s3 my-bucket --prefix config/
+
+# Specify region explicitly
+leaktor scan-s3 my-bucket --region eu-west-1
+
+# Validate secrets and output JSON
+leaktor scan-s3 my-bucket --validate --format json -o results.json
+```
+
+Binary objects and files larger than 5 MB are automatically skipped. Findings use virtual paths like `s3://my-bucket/config/secrets.env`.
+
+### Docker images
+
+Scan all text files inside a Docker image's filesystem. Requires a running Docker daemon.
+
+```bash
+# Pull and scan an image
+leaktor scan-docker myapp:latest
+
+# Scan a remote image
+leaktor scan-docker ghcr.io/org/repo:v1.2
+
+# Use a locally cached image (skip pull)
+leaktor scan-docker myapp:latest --no-pull
+
+# Validate secrets and generate an HTML report
+leaktor scan-docker myapp:latest --validate --format html -o report.html
+```
+
+Leaktor creates a temporary container (never started), exports its filesystem, and scans text files while skipping system directories (`/usr/lib/`, `/var/cache/`, etc.) and binary files. Findings use virtual paths like `docker://myapp:latest/app/config.env`.
+
+### Feature flags
+
+| Feature | Default | Crate dependencies |
+|:--------|:--------|:-------------------|
+| `s3` | enabled | `aws-config`, `aws-sdk-s3` |
+| `docker` | enabled | `bollard`, `futures-util` |
+
+```bash
+# Install without S3/Docker support (smaller binary)
+cargo install leaktor --no-default-features
+
+# Only Docker support
+cargo install leaktor --no-default-features --features docker
 ```
 
 <br />
@@ -625,7 +752,7 @@ If you use the [pre-commit](https://pre-commit.com) framework, add Leaktor to yo
 ```yaml
 repos:
   - repo: https://github.com/reschjonas/leaktor
-    rev: v0.3.0
+    rev: v0.4.0
     hooks:
       - id: leaktor
 ```
@@ -645,15 +772,13 @@ repos:
 
 ## Performance
 
-Multi-threaded scanning with rayon parallelism and compiled regexes.
+Leaktor uses compiled regexes, rayon thread-pool parallelism, and streaming I/O. Typical scan times on a modern machine:
 
-| Benchmark (10 000 files, ~150 MB) | Leaktor | gitleaks | trufflehog |
-|:----------------------------------|--------:|---------:|-----------:|
-| Filesystem scan | **0.8s** | 3.2s | 12.4s |
-| Git history (1000 commits) | **2.1s** | 8.7s | 24.1s |
-| Memory usage (peak RSS) | **~45 MB** | ~120 MB | ~350 MB |
+- ~40 files: **< 1 second** (filesystem only)
+- ~500 files with git history: **1 -- 3 seconds**
+- Large monorepos (10k+ files, 1000+ commits): **5 -- 15 seconds**
 
-*Benchmarks run on an M2 MacBook Pro, 16 GB RAM. Results vary with hardware and repo size.*
+Memory stays low by streaming file content and avoiding full-repo AST construction.
 
 <br />
 

@@ -34,11 +34,13 @@ impl GitHubValidator {
         match response.status() {
             StatusCode::OK => Ok(true),
             StatusCode::UNAUTHORIZED => Ok(false),
-            _ => {
-                // For other status codes, we can't definitively say
-                // Return false to be safe
-                Ok(false)
+            StatusCode::TOO_MANY_REQUESTS => {
+                anyhow::bail!("429 Too Many Requests from api.github.com")
             }
+            status if status.is_server_error() => {
+                anyhow::bail!("Server error {} from api.github.com", status.as_u16())
+            }
+            _ => Ok(false),
         }
     }
 }

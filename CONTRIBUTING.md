@@ -186,33 +186,55 @@ To add a new secret type:
 ```
 leaktor/
 ├── src/
-│   ├── main.rs              # CLI entry point
+│   ├── main.rs              # CLI entry point (clap argument parsing)
 │   ├── lib.rs               # Library exports
+│   ├── commands/            # Subcommand implementations
+│   │   ├── mod.rs
+│   │   ├── scan.rs          # leaktor scan
+│   │   ├── scan_s3.rs       # leaktor scan-s3
+│   │   ├── scan_docker.rs   # leaktor scan-docker
+│   │   ├── trace.rs         # leaktor trace (blast radius)
+│   │   ├── diff.rs          # leaktor diff (scan comparison)
+│   │   ├── remediate.rs     # leaktor remediate
+│   │   ├── init.rs          # leaktor init (project setup)
+│   │   ├── config.rs        # leaktor config
+│   │   ├── list.rs          # leaktor list
+│   │   └── webhook.rs       # Webhook notification logic
 │   ├── config/              # Configuration management
+│   │   ├── baseline.rs      # Baseline fingerprinting
 │   │   ├── ignore.rs        # .leaktorignore handling
-│   │   └── settings.rs      # Config file parsing
+│   │   └── settings.rs      # Config file parsing + allowlist rules
 │   ├── detectors/           # Secret detection logic
-│   │   ├── patterns.rs      # Regex patterns
-│   │   ├── entropy.rs       # Entropy calculation
-│   │   └── context.rs       # Context analysis
+│   │   ├── patterns.rs      # 894 regex patterns (888 secret types)
+│   │   ├── entropy.rs       # Shannon entropy calculation
+│   │   └── context.rs       # Context analysis (test files, docs, placeholders)
 │   ├── models/              # Data structures
 │   │   ├── finding.rs       # Finding representation
-│   │   └── secret.rs        # Secret types
+│   │   └── secret.rs        # Secret types, severity
 │   ├── output/              # Output formatters
 │   │   ├── json.rs          # JSON output
 │   │   ├── sarif.rs         # SARIF output
 │   │   ├── html.rs          # HTML reports
 │   │   └── console.rs       # Terminal output
-│   ├── scanners/            # File/repo scanners
+│   ├── scanners/            # Source scanners
+│   │   ├── filesystem.rs    # Directory scanner
 │   │   ├── git.rs           # Git history scanner
-│   │   └── filesystem.rs    # Directory scanner
-│   └── validators/          # Secret validators
-│       ├── aws.rs           # AWS validation
-│       ├── github.rs        # GitHub validation
-│       └── http.rs          # Generic HTTP validation
-├── tests/                   # Integration tests
-├── Cargo.toml              # Dependencies
-└── README.md               # Documentation
+│   │   ├── stdin.rs         # Stdin scanner
+│   │   ├── multiformat.rs   # K8s, Terraform, Compose, CloudFormation
+│   │   ├── s3.rs            # S3 bucket scanner (feature-gated)
+│   │   └── docker.rs        # Docker image scanner (feature-gated)
+│   ├── validators/          # Secret validators (~80 services)
+│   │   ├── mod.rs           # Validator chain + rate limiter
+│   │   ├── aws.rs           # AWS STS validation
+│   │   ├── github.rs        # GitHub API validation
+│   │   ├── format.rs        # Format validator (all types)
+│   │   ├── services.rs      # Service validator (~60 services)
+│   │   └── ...              # 15+ dedicated API validators
+│   └── diagnostics.rs       # Non-fatal warning system
+├── Cargo.toml
+├── README.md
+├── CHANGELOG.md
+└── EXAMPLES.md
 ```
 
 ## Review Process

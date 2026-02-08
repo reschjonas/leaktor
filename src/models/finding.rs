@@ -58,7 +58,22 @@ impl Finding {
     }
 
     pub fn is_likely_false_positive(&self) -> bool {
+        // Private keys are NEVER false positives when found in code
+        if self.secret.secret_type.is_private_key() {
+            return false;
+        }
+
         // Lower confidence or test files are more likely false positives
-        self.secret.confidence < 0.7 || self.context.is_test_file || self.context.is_documentation
+        // But high-confidence findings (>= 0.95) in test/doc files are still real
+        if self.secret.confidence < 0.7 {
+            return true;
+        }
+
+        if self.context.is_test_file || self.context.is_documentation {
+            // Only mark as likely false positive if confidence is also not very high
+            return self.secret.confidence < 0.90;
+        }
+
+        false
     }
 }

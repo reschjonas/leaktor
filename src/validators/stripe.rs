@@ -31,6 +31,8 @@ impl StripeValidator {
             401 => Ok(false),
             // 403 means the key is valid but doesn't have permission for this endpoint
             403 => Ok(true),
+            429 => anyhow::bail!("429 Too Many Requests from api.stripe.com"),
+            s if s >= 500 => anyhow::bail!("Server error {} from api.stripe.com", s),
             _ => Ok(false),
         }
     }

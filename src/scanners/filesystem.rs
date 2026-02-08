@@ -1,5 +1,6 @@
 use crate::detectors::{ContextAnalyzer, PatternDetector};
 use crate::models::{Finding, Location};
+use crate::scan_warn;
 use anyhow::Result;
 use ignore::WalkBuilder;
 use rayon::prelude::*;
@@ -12,6 +13,8 @@ pub struct FilesystemScanner {
     max_file_size: u64,
     respect_gitignore: bool,
     include_deps: bool,
+    single_file: bool,
+    max_fs_depth: Option<usize>,
     custom_patterns: Vec<crate::config::settings::CustomPattern>,
 }
 
@@ -23,6 +26,8 @@ impl FilesystemScanner {
             max_file_size: 1024 * 1024, // 1MB
             respect_gitignore: true,
             include_deps: false,
+            single_file: false,
+            max_fs_depth: None,
             custom_patterns: Vec::new(),
         }
     }
@@ -56,6 +61,18 @@ impl FilesystemScanner {
         self
     }
 
+    /// Scan a single file instead of a directory tree
+    pub fn with_single_file(mut self, single: bool) -> Self {
+        self.single_file = single;
+        self
+    }
+
+    /// Set maximum filesystem recursion depth (0 = only files in root directory)
+    pub fn with_max_fs_depth(mut self, depth: usize) -> Self {
+        self.max_fs_depth = Some(depth);
+        self
+    }
+
     pub fn scan(&self) -> Result<Vec<Finding>> {
         let files = self.collect_files()?;
 
@@ -69,7 +86,15 @@ impl FilesystemScanner {
         // Scan files in parallel using rayon
         let findings: Vec<Finding> = files
             .par_iter()
-            .flat_map(|file_path| self.scan_file(file_path, &detector).unwrap_or_default())
+            .flat_map(|file_path| {
+                match self.scan_file(file_path, &detector) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        scan_warn!("fs", "failed to scan {}: {}", file_path.display(), e);
+                        Vec::new()
+                    }
+                }
+            })
             .collect();
 
         Ok(findings)
@@ -78,16 +103,42 @@ impl FilesystemScanner {
     fn collect_files(&self) -> Result<Vec<PathBuf>> {
         let mut files = Vec::new();
 
+        // Single file mode: just return the one file
+        if self.single_file && self.root_path.is_file() {
+            match fs::metadata(&self.root_path) {
+                Ok(metadata) => {
+                    if metadata.len() <= self.max_file_size
+                        && !self.is_likely_binary(&self.root_path)
+                    {
+                        files.push(self.root_path.clone());
+                    }
+                }
+                Err(e) => {
+                    scan_warn!(
+                        "fs",
+                        "cannot stat {}: {}",
+                        self.root_path.display(),
+                        e
+                    );
+                }
+            }
+            return Ok(files);
+        }
+
         if self.include_deps {
             // When scanning deps, use walkdir directly to bypass all gitignore filtering.
             // The `ignore` crate's WalkBuilder can filter node_modules/vendor via
             // global rules or built-in heuristics, so we avoid it entirely.
-            for entry in walkdir::WalkDir::new(&self.root_path)
+            let mut walk = walkdir::WalkDir::new(&self.root_path);
+            if let Some(depth) = self.max_fs_depth {
+                walk = walk.max_depth(depth + 1); // +1 because walkdir counts root as depth 0
+            }
+            for entry in walk
                 .into_iter()
                 .filter_entry(|e| {
-                    // Always skip .git directory itself
+                    // Always skip .git and Rust/build artefact directories
                     let name = e.file_name().to_string_lossy();
-                    name != ".git"
+                    name != ".git" && name != "target"
                 })
             {
                 let entry = entry?;
@@ -97,8 +148,14 @@ impl FilesystemScanner {
                     continue;
                 }
 
-                if let Ok(metadata) = fs::metadata(path) {
-                    if metadata.len() > self.max_file_size {
+                match fs::metadata(path) {
+                    Ok(metadata) => {
+                        if metadata.len() > self.max_file_size {
+                            continue;
+                        }
+                    }
+                    Err(e) => {
+                        scan_warn!("fs", "cannot stat {}: {}", path.display(), e);
                         continue;
                     }
                 }
@@ -111,12 +168,16 @@ impl FilesystemScanner {
                 files.push(path.to_path_buf());
             }
         } else {
-            let walker = WalkBuilder::new(&self.root_path)
+            let mut builder = WalkBuilder::new(&self.root_path);
+            builder
                 .git_ignore(self.respect_gitignore)
                 .git_global(self.respect_gitignore)
                 .git_exclude(self.respect_gitignore)
-                .hidden(false)
-                .build();
+                .hidden(false);
+            if let Some(depth) = self.max_fs_depth {
+                builder.max_depth(Some(depth + 1)); // +1 because root is depth 0
+            }
+            let walker = builder.build();
 
             for entry in walker {
                 let entry = entry?;
@@ -126,8 +187,14 @@ impl FilesystemScanner {
                     continue;
                 }
 
-                if let Ok(metadata) = fs::metadata(path) {
-                    if metadata.len() > self.max_file_size {
+                match fs::metadata(path) {
+                    Ok(metadata) => {
+                        if metadata.len() > self.max_file_size {
+                            continue;
+                        }
+                    }
+                    Err(e) => {
+                        scan_warn!("fs", "cannot stat {}: {}", path.display(), e);
                         continue;
                     }
                 }
@@ -154,24 +221,49 @@ impl FilesystemScanner {
         // Skip files that can't be read as UTF-8 (likely binary)
         let content = match fs::read_to_string(file_path) {
             Ok(c) => c,
-            Err(_) => return Ok(findings),
+            Err(e) => {
+                // Distinguish between encoding errors (expected for binary) and
+                // real I/O errors (permissions, missing files, etc.)
+                if e.kind() == std::io::ErrorKind::PermissionDenied
+                    || e.kind() == std::io::ErrorKind::NotFound
+                {
+                    scan_warn!(
+                        "fs",
+                        "cannot read {}: {}",
+                        file_path.display(),
+                        e
+                    );
+                }
+                // InvalidData (UTF-8 decode) is expected for binary files -- skip silently
+                return Ok(findings);
+            }
         };
 
-        // Skip lockfiles and minified files (high false-positive sources)
-        if self.is_lockfile(file_path) || self.is_minified(&content) {
+        // Skip lockfiles, minified files, and scan output files (high false-positive sources)
+        if self.is_lockfile(file_path) || self.is_minified(&content) || self.is_scan_output(file_path) {
             return Ok(findings);
         }
 
         // Multi-format scanning: decode structured files (K8s secrets, Terraform state, etc.)
+        let mut multiformat_findings = Vec::new();
         if let Some(fmt) = super::multiformat::detect_format(file_path, &content) {
-            if let Ok(extra) = super::multiformat::scan_structured_file(
+            match super::multiformat::scan_structured_file(
                 file_path,
                 &content,
                 fmt,
                 detector,
                 self.entropy_threshold,
             ) {
-                findings.extend(extra);
+                Ok(extra) => multiformat_findings = extra,
+                Err(e) => {
+                    scan_warn!(
+                        "parse",
+                        "failed to parse {} as {}: {}",
+                        file_path.display(),
+                        super::multiformat::format_label(fmt),
+                        e
+                    );
+                }
             }
         }
 
@@ -249,6 +341,20 @@ impl FilesystemScanner {
             }
         }
 
+        // Deduplicate: merge multi-format findings with line-by-line findings.
+        // If a multi-format finding has the same secret value as a line-by-line finding
+        // in the same file, keep the one with richer context (multi-format) and drop the
+        // line-by-line duplicate. If no overlap, add the multi-format finding.
+        for mf in multiformat_findings {
+            let is_duplicate = findings.iter().any(|f| {
+                f.secret.value == mf.secret.value
+                    && f.location.file_path == mf.location.file_path
+            });
+            if !is_duplicate {
+                findings.push(mf);
+            }
+        }
+
         Ok(findings)
     }
 
@@ -270,6 +376,33 @@ impl FilesystemScanner {
             "bun.lockb",
         ];
         lockfiles.contains(&filename)
+    }
+
+    /// Check if file is a scan output file (HTML reports, SARIF results, etc.)
+    /// that should be excluded to prevent re-scanning previous scan results.
+    fn is_scan_output(&self, path: &Path) -> bool {
+        let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+
+        // Skip by extension
+        if ext == "sarif" {
+            return true;
+        }
+
+        // Skip known scan output filenames
+        let output_filenames = [
+            "leaktor-report.html",
+            "report.html",
+            "results.json",
+            "results.sarif",
+            "scan.json",
+            "scan-results.json",
+            "leaktor-results.json",
+        ];
+        output_filenames.contains(&filename)
     }
 
     fn is_minified(&self, content: &str) -> bool {
@@ -313,15 +446,24 @@ impl FilesystemScanner {
         }
 
         // Content sniffing: read first 512 bytes and check for null bytes
-        if let Ok(file) = fs::File::open(path) {
-            use std::io::Read;
-            let mut buffer = [0u8; 512];
-            let mut reader = std::io::BufReader::new(file);
-            if let Ok(n) = reader.read(&mut buffer) {
-                // If we find null bytes in the first 512 bytes, it's likely binary
-                if buffer[..n].contains(&0) {
-                    return true;
+        match fs::File::open(path) {
+            Ok(file) => {
+                use std::io::Read;
+                let mut buffer = [0u8; 512];
+                let mut reader = std::io::BufReader::new(file);
+                match reader.read(&mut buffer) {
+                    Ok(n) => {
+                        if buffer[..n].contains(&0) {
+                            return true;
+                        }
+                    }
+                    Err(e) => {
+                        scan_warn!("fs", "cannot read {}: {}", path.display(), e);
+                    }
                 }
+            }
+            Err(e) => {
+                scan_warn!("fs", "cannot open {}: {}", path.display(), e);
             }
         }
 

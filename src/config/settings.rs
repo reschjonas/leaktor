@@ -45,6 +45,33 @@ pub struct Config {
     /// Severity levels to report
     #[serde(default = "default_severities")]
     pub report_severities: Vec<String>,
+
+    /// Maximum number of concurrent API validation requests.
+    /// Prevents hammering external APIs when scanning large repos.
+    /// Set to 0 to disable API-based validation entirely.
+    #[serde(default = "default_max_concurrent_validations")]
+    pub max_concurrent_validations: usize,
+
+    /// Minimum delay between API requests to the same host (in milliseconds).
+    /// Spreads out requests to avoid triggering service rate limits.
+    #[serde(default = "default_validation_delay_ms")]
+    pub validation_delay_ms: u64,
+
+    /// Maximum number of retries when an API returns 429 Too Many Requests.
+    #[serde(default = "default_validation_max_retries")]
+    pub validation_max_retries: u32,
+}
+
+fn default_max_concurrent_validations() -> usize {
+    10
+}
+
+fn default_validation_delay_ms() -> u64 {
+    100
+}
+
+fn default_validation_max_retries() -> u32 {
+    3
 }
 
 /// A user-defined detection pattern.
@@ -98,6 +125,7 @@ pub struct CustomPattern {
 /// severities = ["LOW", "MEDIUM"]
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AllowlistRule {
     /// Human-readable description of why this rule exists
     #[serde(default)]
@@ -125,8 +153,18 @@ pub struct AllowlistRule {
 }
 
 impl AllowlistRule {
+    /// Returns true if all filtering criteria are empty, meaning this rule
+    /// has no constraints and would incorrectly suppress every finding.
+    pub fn has_no_criteria(&self) -> bool {
+        self.secret_types.is_empty()
+            && self.paths.is_empty()
+            && self.value_regex.is_none()
+            && self.severities.is_empty()
+    }
+
     /// Check whether a finding matches this rule.
     /// A finding must match **all** non-empty criteria to be suppressed.
+    /// A rule with zero criteria never matches (defense against misconfiguration).
     pub fn matches(
         &self,
         secret_type_name: &str,
@@ -134,31 +172,25 @@ impl AllowlistRule {
         secret_value: &str,
         severity_name: &str,
     ) -> bool {
+        // A rule with no criteria at all is a misconfiguration -- it should
+        // never act as a wildcard that suppresses every finding.
+        if self.has_no_criteria() {
+            return false;
+        }
+
         // Check secret_types (if specified)
         if !self.secret_types.is_empty() && !self.secret_types.iter().any(|t| t == secret_type_name)
         {
             return false;
         }
 
-        // Check paths (if specified) -- match against the full path and also
-        // against just the filename / relative tail so that user-specified
-        // patterns like "tests/fixtures/*" work with absolute file paths.
+        // Check paths (if specified).
+        // `glob_match` already handles:
+        //   - Patterns without `/` are matched against the filename
+        //   - Patterns with `/` are tried against every suffix of the path
+        //   - `**/` anchoring
         if !self.paths.is_empty() {
-            let matches_any = self.paths.iter().any(|p| {
-                // Direct match
-                if glob_match(file_path, p) {
-                    return true;
-                }
-                // Try matching the tail of the path (handles absolute vs relative)
-                // e.g. "/tmp/proj/tests/fixtures/fake.env" should match "tests/fixtures/*"
-                if let Some(idx) = file_path.find(p.trim_end_matches('*').trim_end_matches('/')) {
-                    let tail = &file_path[idx..];
-                    if glob_match(tail, p) {
-                        return true;
-                    }
-                }
-                false
-            });
+            let matches_any = self.paths.iter().any(|p| glob_match(file_path, p));
             if !matches_any {
                 return false;
             }
@@ -190,35 +222,154 @@ impl AllowlistRule {
     }
 }
 
-/// Simple glob matching (supports `*` and `**`).
-fn glob_match(text: &str, pattern: &str) -> bool {
-    if pattern.contains('*') {
-        let parts: Vec<&str> = pattern.split('*').collect();
-        if parts.is_empty() {
-            return false;
-        }
+/// Glob matching for allowlist paths.
+///
+/// Supported syntax:
+///   - `*`    matches any sequence of non-`/` characters (single segment)
+///   - `**`   matches any sequence of characters including `/` (multiple segments)
+///   - `?`    matches exactly one non-`/` character
+///   - `!pat` negation — returns the inverse of matching `pat`
+///   - All other characters match literally (case-sensitive)
+///
+/// Follows `.gitignore` conventions:
+///   - A pattern *without* a `/` separator (e.g. `*.rs`) is matched against the
+///     filename only (last path component), so `*.rs` matches `src/main.rs`.
+///   - A pattern *with* a `/` (or starting with `**/`) is matched against the
+///     full path, with `**/` anchoring allowed anywhere.
+pub fn glob_match(text: &str, pattern: &str) -> bool {
+    // Handle negation: !pattern
+    if let Some(inner) = pattern.strip_prefix('!') {
+        return !glob_match(text, inner);
+    }
 
-        let mut pos = 0;
-        for (i, part) in parts.iter().enumerate() {
-            if i == 0 && !part.is_empty() {
-                if !text[pos..].starts_with(part) {
-                    return false;
+    // If pattern starts with **/, allow matching anywhere in the path
+    if let Some(suffix) = pattern.strip_prefix("**/") {
+        // Try matching against every possible tail of the path
+        if glob_match_inner(text, suffix) {
+            return true;
+        }
+        for (i, c) in text.char_indices() {
+            if c == '/' && glob_match_inner(&text[i + 1..], suffix) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // .gitignore convention: if the pattern contains no `/`, match it against
+    // the filename (last component) rather than requiring a full-path match.
+    // This means `*.rs` matches `src/main.rs` just like `.gitignore`.
+    if !pattern.contains('/') {
+        let filename = text.rsplit('/').next().unwrap_or(text);
+        return glob_match_inner(filename, pattern);
+    }
+
+    // Pattern contains `/` — try full-path match first, then try matching
+    // against any suffix of the path (handles absolute vs relative paths).
+    if glob_match_inner(text, pattern) {
+        return true;
+    }
+    for (i, c) in text.char_indices() {
+        if c == '/' && glob_match_inner(&text[i + 1..], pattern) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Core recursive glob matcher. Matches `text` against `pattern` where:
+///   - `**` matches zero or more path segments (including separators)
+///   - `*`  matches zero or more non-`/` characters
+///   - `?`  matches exactly one non-`/` character
+pub(crate) fn glob_match_inner(text: &str, pattern: &str) -> bool {
+    // Use iterative approach with backtracking positions for `*` and `**`
+    let text_bytes = text.as_bytes();
+    let pat_bytes = pattern.as_bytes();
+    let (tlen, plen) = (text_bytes.len(), pat_bytes.len());
+
+    let mut ti = 0usize; // text index
+    let mut pi = 0usize; // pattern index
+
+    // Backtrack positions for single `*`
+    let mut star_pi: Option<usize> = None;
+    let mut star_ti: usize = 0;
+
+    // Backtrack positions for `**`
+    let mut dstar_pi: Option<usize> = None;
+    let mut dstar_ti: usize = 0;
+
+    while ti < tlen || pi < plen {
+        if pi < plen {
+            // Check for `**`
+            if pi + 1 < plen && pat_bytes[pi] == b'*' && pat_bytes[pi + 1] == b'*' {
+                // Skip all consecutive `*`
+                let mut pp = pi;
+                while pp < plen && pat_bytes[pp] == b'*' {
+                    pp += 1;
                 }
-                pos += part.len();
-            } else if i == parts.len() - 1 && !part.is_empty() {
-                return text.ends_with(part);
-            } else if !part.is_empty() {
-                if let Some(found_pos) = text[pos..].find(part) {
-                    pos += found_pos + part.len();
-                } else {
-                    return false;
+                // Skip optional trailing `/` after `**`
+                if pp < plen && pat_bytes[pp] == b'/' {
+                    pp += 1;
+                }
+                dstar_pi = Some(pp);
+                dstar_ti = ti;
+                pi = pp;
+                // Reset single-star backtrack since ** is more powerful
+                star_pi = None;
+                continue;
+            }
+
+            // Check for single `*`
+            if pat_bytes[pi] == b'*' {
+                star_pi = Some(pi + 1);
+                star_ti = ti;
+                pi += 1;
+                continue;
+            }
+
+            if ti < tlen {
+                // `?` matches any single char except `/`
+                if pat_bytes[pi] == b'?' && text_bytes[ti] != b'/' {
+                    ti += 1;
+                    pi += 1;
+                    continue;
+                }
+
+                // Literal match
+                if pat_bytes[pi] == text_bytes[ti] {
+                    ti += 1;
+                    pi += 1;
+                    continue;
                 }
             }
         }
-        true
-    } else {
-        text.contains(pattern)
+
+        // Mismatch — try backtracking to single `*` (no `/` crossing)
+        if let Some(sp) = star_pi {
+            if star_ti < tlen && text_bytes[star_ti] != b'/' {
+                star_ti += 1;
+                ti = star_ti;
+                pi = sp;
+                continue;
+            }
+        }
+
+        // Mismatch — try backtracking to `**` (crosses `/`)
+        if let Some(dp) = dstar_pi {
+            dstar_ti += 1;
+            if dstar_ti <= tlen {
+                ti = dstar_ti;
+                pi = dp;
+                star_pi = None; // reset single-star
+                continue;
+            }
+        }
+
+        return false;
     }
+
+    true
 }
 
 fn default_severities() -> Vec<String> {
@@ -245,6 +396,9 @@ impl Default for Config {
             custom_patterns: Vec::new(),
             allowlist: Vec::new(),
             report_severities: default_severities(),
+            max_concurrent_validations: default_max_concurrent_validations(),
+            validation_delay_ms: default_validation_delay_ms(),
+            validation_max_retries: default_validation_max_retries(),
         }
     }
 }
@@ -254,6 +408,7 @@ impl Config {
     pub fn from_toml_file(path: &Path) -> Result<Self> {
         let content = fs::read_to_string(path)?;
         let config: Config = toml::from_str(&content)?;
+        config.warn_empty_allowlist_rules();
         Ok(config)
     }
 
@@ -261,7 +416,29 @@ impl Config {
     pub fn from_yaml_file(path: &Path) -> Result<Self> {
         let content = fs::read_to_string(path)?;
         let config: Config = serde_yaml::from_str(&content)?;
+        config.warn_empty_allowlist_rules();
         Ok(config)
+    }
+
+    /// Emit a warning for any allowlist rule that has no filtering criteria.
+    /// Such rules are ignored at match time to prevent silent suppression of
+    /// all findings (a common misconfiguration).
+    fn warn_empty_allowlist_rules(&self) {
+        for (i, rule) in self.allowlist.iter().enumerate() {
+            if rule.has_no_criteria() {
+                let desc = rule
+                    .description
+                    .as_deref()
+                    .unwrap_or("<no description>");
+                eprintln!(
+                    "warning: allowlist rule #{} ({}) has no criteria (secret_types, paths, \
+                     value_regex, severities are all empty) -- this rule will be ignored. \
+                     Specify at least one criterion.",
+                    i + 1,
+                    desc,
+                );
+            }
+        }
     }
 
     /// Save configuration to a TOML file
@@ -446,7 +623,7 @@ mod tests {
         let rule = AllowlistRule {
             description: None,
             secret_types: vec!["Sentry DSN".to_string()],
-            paths: vec!["tests/*".to_string()],
+            paths: vec!["tests/**/*".to_string()],
             value_regex: None,
             severities: vec![],
         };
@@ -460,10 +637,77 @@ mod tests {
     }
 
     #[test]
-    fn test_glob_match() {
-        assert!(glob_match("tests/fixtures/secret.env", "tests/*"));
-        assert!(glob_match("src/main.test.rs", "*.test.*"));
-        assert!(glob_match("foo/bar/baz.js", "**/baz.js"));
+    fn test_glob_match_single_star() {
+        // Single `*` matches within one segment (no `/`)
+        assert!(glob_match("tests/fixtures/secret.env", "tests/fixtures/*.env"));
+        assert!(glob_match("secret.env", "*.env"));
+        assert!(!glob_match("tests/fixtures/secret.env", "tests/*.env")); // * doesn't cross /
         assert!(!glob_match("src/main.rs", "*.py"));
+    }
+
+    #[test]
+    fn test_glob_match_double_star() {
+        // `**` matches across directory boundaries
+        assert!(glob_match("foo/bar/baz.js", "**/baz.js"));
+        assert!(glob_match("baz.js", "**/baz.js"));
+        assert!(glob_match("a/b/c/d/e.txt", "a/**/e.txt"));
+        assert!(glob_match("a/e.txt", "a/**/e.txt"));
+        assert!(glob_match("tests/fixtures/secret.env", "tests/**/*.env"));
+        assert!(glob_match("tests/deep/nested/secret.env", "tests/**/*.env"));
+    }
+
+    #[test]
+    fn test_glob_match_question_mark() {
+        assert!(glob_match("test.rs", "test.?s"));
+        assert!(glob_match("test.js", "test.?s"));
+        assert!(!glob_match("test.rs", "test.??s"));
+    }
+
+    #[test]
+    fn test_glob_match_negation() {
+        assert!(!glob_match("secret.env", "!*.env"));
+        assert!(glob_match("secret.txt", "!*.env"));
+    }
+
+    #[test]
+    fn test_glob_match_exact() {
+        // Full path matches exactly
+        assert!(glob_match("src/main.rs", "src/main.rs"));
+        // Pattern without `/` matches the filename (gitignore convention)
+        assert!(glob_match("src/main.rs", "main.rs"));
+        // Pattern with `/` requires path match
+        assert!(!glob_match("src/main.rs", "lib/main.rs"));
+    }
+
+    #[test]
+    fn test_allowlist_empty_rule_never_matches() {
+        // A rule with no criteria at all should never suppress anything.
+        // This prevents misconfigured rules from acting as wildcards.
+        let rule = AllowlistRule {
+            description: None,
+            secret_types: vec![],
+            paths: vec![],
+            value_regex: None,
+            severities: vec![],
+        };
+        assert!(rule.has_no_criteria());
+        assert!(!rule.matches("AWS Access Key", "src/config.rs", "AKIAIOSFODNN7REAL", "CRITICAL"));
+        assert!(!rule.matches("GitHub PAT", "any/path", "any_value", "HIGH"));
+    }
+
+    #[test]
+    fn test_deny_unknown_fields_rejects_typos() {
+        // If a user writes `secret_type` (singular) instead of `secret_types`,
+        // deserialization must fail rather than silently ignoring the field.
+        let bad_toml = r#"
+            [[allowlist]]
+            secret_type = "Generic High Entropy"
+            file_path = "*.lock"
+        "#;
+        let result: std::result::Result<Config, _> = toml::from_str(bad_toml);
+        assert!(
+            result.is_err(),
+            "Config with unknown fields should fail to parse"
+        );
     }
 }

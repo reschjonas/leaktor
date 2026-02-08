@@ -4,7 +4,9 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| 0.3.x   | :white_check_mark: |
+| 0.2.x   | :white_check_mark: |
+| 0.1.x   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -46,7 +48,8 @@ When using Leaktor:
 
 The `--validate` flag makes API calls to check if secrets are active:
 - AWS validation uses AWS STS GetCallerIdentity
-- GitHub validation uses GitHub API
+- GitHub, GitLab, Stripe, Slack, and 15+ other services validated via their APIs
+- Rate limiting protects against API hammering (configurable concurrency, delay, retries)
 - **Use responsibly** and only with proper authorization
 
 ### Output Files
@@ -61,9 +64,11 @@ Output files (JSON, SARIF, HTML) may contain:
 
 - **No external telemetry** - All scanning happens locally
 - **Opt-in validation** - Network calls only with explicit `--validate` flag
+- **Rate-limited validation** - Configurable concurrency, delay, and retry limits
 - **Secret redaction** - Secrets are partially redacted in console output
 - **Entropy analysis** - Reduces false positives
 - **Context awareness** - Understands test files and examples
+- **Warning diagnostics** - Non-fatal errors surfaced via `scan_warn!` instead of silently ignored
 
 ## Vulnerability Disclosure Policy
 
@@ -80,4 +85,4 @@ We thank the following researchers for responsibly disclosing vulnerabilities:
 
 ---
 
-**Last Updated:** 2025-11-17
+**Last Updated:** 2026-02-08

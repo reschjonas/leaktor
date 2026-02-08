@@ -29,6 +29,8 @@ impl HuggingFaceValidator {
         match response.status().as_u16() {
             200 => Ok(true),
             401 => Ok(false),
+            429 => anyhow::bail!("429 Too Many Requests from huggingface.co"),
+            s if s >= 500 => anyhow::bail!("Server error {} from huggingface.co", s),
             _ => Ok(false),
         }
     }

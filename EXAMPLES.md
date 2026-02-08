@@ -6,6 +6,9 @@ This document provides practical examples of using Leaktor to scan for secrets i
 - [Basic Scanning](#basic-scanning)
 - [Output Formats](#output-formats)
 - [Advanced Scanning](#advanced-scanning)
+- [S3 and Docker Scanning](#s3-and-docker-scanning)
+- [Blast Radius Analysis](#blast-radius-analysis)
+- [Scan Comparison](#scan-comparison)
 - [Secret Validation](#validation)
 - [CI/CD Integration](#cicd-integration)
 - [Ignoring False Positives](#ignoring-false-positives)
@@ -61,7 +64,7 @@ Total Findings: 3
 
 Findings
 
-[1] [CRITICAL] AWS Access Key [CRITICAL]
+[1] [CRITICAL] AWS Access Key
   Location: src/config.rs:42
   Confidence: 95%
   ...
@@ -139,6 +142,76 @@ Exits with code 1 if any secrets are detected.
 
 ---
 
+## S3 and Docker Scanning
+
+### Scan an S3 Bucket
+```bash
+# Scan all objects in a bucket
+leaktor scan-s3 my-config-bucket
+
+# Scope to a specific prefix
+leaktor scan-s3 my-bucket --prefix config/production/
+
+# Scan with a specific region
+leaktor scan-s3 my-bucket --region eu-west-1
+```
+
+Uses the standard AWS credential chain (`AWS_PROFILE`, `~/.aws/credentials`, instance roles, etc.). Binary objects and files >5 MB are automatically skipped.
+
+### Scan a Docker Image
+```bash
+# Scan an image (pulls automatically)
+leaktor scan-docker myapp:latest
+
+# Skip pulling (use local image)
+leaktor scan-docker myapp:latest --no-pull
+
+# Scan a remote image
+leaktor scan-docker ghcr.io/org/app:v2.1.0
+```
+
+Requires a running Docker daemon. Exports the container filesystem and scans text files while skipping system directories.
+
+---
+
+## Blast Radius Analysis
+
+### Trace a Secret Across the Codebase
+```bash
+# Trace by value
+leaktor trace --value "AKIAIOSFODNN7EXAMPLE"
+
+# Trace by secret type
+leaktor trace --type "AWS Access Key"
+
+# Trace from a findings file
+leaktor trace --file results.json
+```
+
+Shows every file and line where the secret appears, categorized by usage type (configuration, source code, infrastructure, etc.).
+
+---
+
+## Scan Comparison
+
+### Compare Two Scan Results
+```bash
+# Run scans at different points in time
+leaktor scan --format json --output before.json
+# ... make changes ...
+leaktor scan --format json --output after.json
+
+# See what changed
+leaktor diff before.json after.json
+
+# JSON output for automation
+leaktor diff before.json after.json --format json
+```
+
+Shows added, removed, and unchanged findings between two scans.
+
+---
+
 ## Validation
 
 ### Validate Detected Secrets
@@ -152,7 +225,7 @@ leaktor scan --validate
 
 **Example output:**
 ```
-[1] [CRITICAL] AWS Access Key [CRITICAL]
+[1] [CRITICAL] AWS Access Key
   Status: [OK] VALIDATED (Active!)
   Location: config/prod.env:12
 ```
@@ -176,14 +249,12 @@ jobs:
   leaktor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full git history
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install Leaktor
         run: cargo install --path .
@@ -193,7 +264,7 @@ jobs:
 
       - name: Upload SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
 ```
@@ -239,13 +310,13 @@ pipeline {
 
 ## Ignoring False Positives
 
-### Create .leaktorignore File
+### Project Setup with `leaktor init`
 
 ```bash
 leaktor init
 ```
 
-Creates `.leaktorignore` with common patterns:
+Creates config files, ignore file, pre-commit hook, and CI workflow in one command. The generated `.leaktorignore` includes common patterns:
 
 ```
 # Test files
@@ -539,17 +610,18 @@ echo "vendor/*" >> .leaktorignore
 leaktor list
 ```
 
-**Output shows all detectable patterns:**
-- AWS (Access Keys, Secret Keys, Session Tokens, MWS Keys)
-- Google Cloud (API Keys, Service Accounts)
-- Azure (Storage Keys, Connection Strings)
-- GitHub (Personal Access Tokens, OAuth Tokens)
-- GitLab (Personal Access Tokens)
-- Stripe (API Keys, Restricted Keys)
-- SendGrid, Twilio, Slack, Heroku, Mailgun, Mailchimp
-- Private Keys (RSA, SSH, PGP, EC)
-- Database Connection Strings (MongoDB, PostgreSQL, MySQL, Redis)
-- JWT Tokens, Generic API Keys, High-Entropy Strings
+**Output shows all 888 detectable secret types across 16 categories:**
+- Cloud Providers (AWS, GCP, Azure, Alibaba, Tencent, DigitalOcean, etc.)
+- Version Control (GitHub, GitLab, Bitbucket -- PATs, OAuth, App tokens)
+- Payment & Finance (Stripe, Square, Coinbase, Flutterwave, etc.)
+- Communication (Slack, Twilio, Discord, Telegram, SendGrid, Mailgun, etc.)
+- CI/CD & DevOps (CircleCI, Vercel, Railway, Heroku, Scalingo, etc.)
+- Monitoring & Observability (Datadog, New Relic, Sentry, Grafana, etc.)
+- Databases & Storage (MongoDB, PostgreSQL, MySQL, Redis, PlanetScale, Neon, etc.)
+- AI/ML (OpenAI, Anthropic, HuggingFace, Replicate, Cohere)
+- Private Keys (RSA, SSH, PGP, EC, DSA, PKCS8, Age)
+- Identity & Auth (Okta, Auth0, Firebase, Azure AD, Vault)
+- Generic patterns (JWT, API keys, passwords, high-entropy strings)
 
 ---
 
@@ -585,7 +657,5 @@ leaktor init --help
 -  [Report a bug](https://github.com/reschjonas/leaktor/issues)
 -  [Request a feature](https://github.com/reschjonas/leaktor/issues)
 -  [Documentation](https://github.com/reschjonas/leaktor)
-
----
 
 ---

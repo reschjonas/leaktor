@@ -1,13 +1,29 @@
 use crate::detectors::{ContextAnalyzer, PatternDetector};
 use crate::models::{Finding, Location};
+use crate::scan_warn;
 use anyhow::{Context, Result};
-use git2::{Commit, Diff, DiffOptions, Repository};
-use std::path::{Path, PathBuf};
+use git2::{Commit, Diff, DiffOptions, Oid, Repository};
+use rayon::prelude::*;
+use std::path::PathBuf;
+
+/// Parse a git commit timestamp, warning on invalid values.
+fn commit_timestamp(commit: &Commit) -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::from_timestamp(commit.time().seconds(), 0).unwrap_or_else(|| {
+        scan_warn!(
+            "git",
+            "invalid timestamp {} in commit {}",
+            commit.time().seconds(),
+            commit.id()
+        );
+        chrono::DateTime::default()
+    })
+}
 
 pub struct GitScanner {
     repo_path: PathBuf,
     scan_history: bool,
     max_depth: Option<usize>,
+    max_fs_depth: Option<usize>,
     entropy_threshold: f64,
     /// Only scan commits after this commit hash (exclusive).
     since_commit: Option<String>,
@@ -23,6 +39,7 @@ impl GitScanner {
             repo_path,
             scan_history: true,
             max_depth: None,
+            max_fs_depth: None,
             entropy_threshold: 3.5,
             since_commit: None,
             commit_range: None,
@@ -51,6 +68,12 @@ impl GitScanner {
 
     pub fn with_max_depth(mut self, depth: usize) -> Self {
         self.max_depth = Some(depth);
+        self
+    }
+
+    /// Set maximum filesystem recursion depth for working directory scan
+    pub fn with_max_fs_depth(mut self, depth: usize) -> Self {
+        self.max_fs_depth = Some(depth);
         self
     }
 
@@ -93,11 +116,13 @@ impl GitScanner {
         if self.scan_history {
             let history_findings = self.scan_git_history(&repo)?;
 
-            // Deduplicate: only add history findings that aren't already found in current files
+            // Deduplicate: only add history findings that aren't already found
+            // in current files. We compare by file_path + value only (ignoring
+            // line number) because line numbers can shift between the working
+            // directory and historical commits due to file modifications.
             for hf in history_findings {
                 let dominated = findings.iter().any(|f: &Finding| {
                     f.location.file_path == hf.location.file_path
-                        && f.location.line_number == hf.location.line_number
                         && f.secret.value == hf.secret.value
                 });
                 if !dominated {
@@ -110,38 +135,128 @@ impl GitScanner {
     }
 
     fn scan_git_history(&self, repo: &Repository) -> Result<Vec<Finding>> {
-        let mut findings = Vec::new();
         let mut revwalk = repo.revwalk()?;
         revwalk.push_head()?;
 
         let max_commits = self.max_depth.unwrap_or(usize::MAX);
 
-        // Resolve the --since-commit boundary OID if provided
+        // Resolve the --since-commit boundary OID if provided.
+        // Use revwalk.hide() to properly exclude the boundary commit and all
+        // its ancestors. This is more reliable than manual OID comparison,
+        // especially with merge commits and non-linear histories.
         let since_oid = if let Some(ref since) = self.since_commit {
             let obj = repo
                 .revparse_single(since)
                 .with_context(|| format!("Could not resolve commit: {}", since))?;
-            Some(obj.id())
+            let oid = obj.id();
+            revwalk.hide(oid).with_context(|| {
+                format!("Could not set boundary commit: {}", since)
+            })?;
+            Some(oid)
         } else {
             None
         };
 
+        // Collect all commit OIDs first (git2 objects aren't Send)
+        let mut commit_oids: Vec<Oid> = Vec::new();
         for (commit_count, oid) in revwalk.enumerate() {
             if commit_count >= max_commits {
                 break;
             }
-
             let oid = oid?;
+            commit_oids.push(oid);
+        }
 
-            // Stop when we reach the --since-commit boundary
-            if let Some(boundary) = since_oid {
-                if oid == boundary {
-                    break;
+        // Process commits in parallel using rayon
+        // Each thread opens its own Repository handle (git2 is not thread-safe)
+        let repo_path = self.repo_path.clone();
+        let entropy_threshold = self.entropy_threshold;
+        let custom_patterns = self.custom_patterns.clone();
+
+        let mut findings: Vec<Finding> = commit_oids
+            .par_iter()
+            .flat_map(|oid| {
+                let repo = match Repository::open(&repo_path) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        scan_warn!(
+                            "git",
+                            "could not open repo for commit {}: {}",
+                            oid,
+                            e
+                        );
+                        return Vec::new();
+                    }
+                };
+                let commit = match repo.find_commit(*oid) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        scan_warn!("git", "could not find commit {}: {}", oid, e);
+                        return Vec::new();
+                    }
+                };
+                match Self::scan_commit_static(
+                    &repo,
+                    &commit,
+                    entropy_threshold,
+                    &custom_patterns,
+                ) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        scan_warn!(
+                            "git",
+                            "error scanning commit {}: {}",
+                            oid,
+                            e
+                        );
+                        Vec::new()
+                    }
+                }
+            })
+            .collect();
+
+        // When --since-commit is set, also produce a cumulative diff from the
+        // boundary commit to HEAD so that secrets visible in the aggregate diff
+        // (but not surfaced by individual per-commit diffs) are still detected.
+        if let Some(boundary) = since_oid {
+            if let Ok(head_ref) = repo.head() {
+                if let Some(head_oid) = head_ref.target() {
+                    if let (Ok(from_commit), Ok(to_commit)) = (
+                        repo.find_commit(boundary),
+                        repo.find_commit(head_oid),
+                    ) {
+                        if let (Ok(from_tree), Ok(to_tree)) =
+                            (from_commit.tree(), to_commit.tree())
+                        {
+                            let mut diff_opts = DiffOptions::new();
+                            if let Ok(cumulative_diff) = repo.diff_tree_to_tree(
+                                Some(&from_tree),
+                                Some(&to_tree),
+                                Some(&mut diff_opts),
+                            ) {
+                                let mut cumulative_findings = Vec::new();
+                                let _ = Self::scan_diff_static(
+                                    repo,
+                                    &cumulative_diff,
+                                    &to_commit,
+                                    self.entropy_threshold,
+                                    &self.custom_patterns,
+                                    &mut cumulative_findings,
+                                );
+                                for cf in cumulative_findings {
+                                    let dominated = findings.iter().any(|f: &Finding| {
+                                        f.location.file_path == cf.location.file_path
+                                            && f.secret.value == cf.secret.value
+                                    });
+                                    if !dominated {
+                                        findings.push(cf);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            let commit = repo.find_commit(oid)?;
-            findings.extend(self.scan_commit(repo, &commit)?);
         }
 
         Ok(findings)
@@ -149,6 +264,14 @@ impl GitScanner {
 
     /// Scan only the commits in a specific range (from..to).
     /// `from` is exclusive, `to` is inclusive.
+    ///
+    /// Two scanning strategies are combined:
+    ///   1. **Diff-based**: walk every commit in the range and detect secrets
+    ///      introduced in each diff (same as history scanning).
+    ///   2. **Cumulative diff**: diff the *tree* at `from` against the *tree*
+    ///      at `to` and scan all added/modified lines. This catches secrets
+    ///      that appear in the aggregate diff even when individual per-commit
+    ///      diffs don't surface them (e.g. a file moved without changes).
     fn scan_commit_range(&self, repo: &Repository, from: &str, to: &str) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
 
@@ -159,6 +282,7 @@ impl GitScanner {
             .revparse_single(to)
             .with_context(|| format!("Could not resolve commit: {}", to))?;
 
+        // --- Strategy 1: per-commit diffs ---
         let mut revwalk = repo.revwalk()?;
         revwalk.push(to_obj.id())?;
         revwalk.hide(from_obj.id())?;
@@ -175,6 +299,65 @@ impl GitScanner {
             findings.extend(self.scan_commit(repo, &commit)?);
         }
 
+        // --- Strategy 2: cumulative diff (from_tree..to_tree) ---
+        let from_commit = repo.find_commit(from_obj.id())
+            .with_context(|| format!("Could not find commit object for: {}", from))?;
+        let to_commit = repo.find_commit(to_obj.id())
+            .with_context(|| format!("Could not find commit object for: {}", to))?;
+
+        let from_tree = from_commit.tree()?;
+        let to_tree = to_commit.tree()?;
+
+        let mut diff_opts = DiffOptions::new();
+        let cumulative_diff =
+            repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), Some(&mut diff_opts))?;
+
+        // Use to_commit as the attribution commit for cumulative findings
+        let mut cumulative_findings = Vec::new();
+        Self::scan_diff_static(
+            repo,
+            &cumulative_diff,
+            &to_commit,
+            self.entropy_threshold,
+            &self.custom_patterns,
+            &mut cumulative_findings,
+        )?;
+
+        // Merge cumulative findings, deduplicating against what we already have
+        for cf in cumulative_findings {
+            let dominated = findings.iter().any(|f: &Finding| {
+                f.location.file_path == cf.location.file_path
+                    && f.secret.value == cf.secret.value
+            });
+            if !dominated {
+                findings.push(cf);
+            }
+        }
+
+        Ok(findings)
+    }
+
+    /// Static version for parallel scanning (each thread has its own repo handle)
+    fn scan_commit_static(
+        repo: &Repository,
+        commit: &Commit,
+        entropy_threshold: f64,
+        custom_patterns: &[crate::config::settings::CustomPattern],
+    ) -> Result<Vec<Finding>> {
+        let mut findings = Vec::new();
+        let tree = commit.tree()?;
+        let parent_tree = if commit.parent_count() > 0 {
+            Some(commit.parent(0)?.tree()?)
+        } else {
+            None
+        };
+        let mut diff_opts = DiffOptions::new();
+        let diff = if let Some(parent_tree) = parent_tree {
+            repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), Some(&mut diff_opts))?
+        } else {
+            repo.diff_tree_to_tree(None, Some(&tree), Some(&mut diff_opts))?
+        };
+        Self::scan_diff_static(repo, &diff, commit, entropy_threshold, custom_patterns, &mut findings)?;
         Ok(findings)
     }
 
@@ -204,6 +387,78 @@ impl GitScanner {
         Ok(findings)
     }
 
+    /// Static version for parallel scanning
+    fn scan_diff_static(
+        _repo: &Repository,
+        diff: &Diff,
+        commit: &Commit,
+        entropy_threshold: f64,
+        custom_patterns: &[crate::config::settings::CustomPattern],
+        findings: &mut Vec<Finding>,
+    ) -> Result<()> {
+        let detector = if custom_patterns.is_empty() {
+            PatternDetector::new()
+        } else {
+            PatternDetector::with_custom_patterns(custom_patterns)
+        };
+
+        let commit_ts = commit_timestamp(commit);
+
+        diff.foreach(
+            &mut |delta, _progress| {
+                let file_path = match delta.new_file().path() {
+                    Some(p) => p,
+                    None => {
+                        scan_warn!(
+                            "git",
+                            "diff delta has no file path in commit {}",
+                            commit.id()
+                        );
+                        return true;
+                    }
+                };
+                let file_context = ContextAnalyzer::analyze_file(file_path);
+                if file_context.is_vendor {
+                    return true;
+                }
+                true
+            },
+            None,
+            None,
+            Some(&mut |_delta, _hunk, line| {
+                let content = String::from_utf8_lossy(line.content());
+                if line.origin() == '+' {
+                    let secrets = detector.scan_line(&content, entropy_threshold);
+                    for secret in secrets {
+                        if let Some(path) = _delta.new_file().path() {
+                            let file_context = ContextAnalyzer::analyze_file(path);
+                            let location = Location {
+                                file_path: path.to_path_buf(),
+                                line_number: line.new_lineno().unwrap_or(0) as usize,
+                                column_start: 0,
+                                column_end: content.len(),
+                                commit_hash: Some(commit.id().to_string()),
+                                commit_author: commit.author().name().map(|s| s.to_string()),
+                                commit_date: Some(commit_ts),
+                            };
+                            let context = ContextAnalyzer::build_context(
+                                content.to_string(),
+                                None,
+                                None,
+                                &file_context,
+                            );
+                            let finding = Finding::new(secret, location, context);
+                            findings.push(finding);
+                        }
+                    }
+                }
+                true
+            }),
+        )?;
+
+        Ok(())
+    }
+
     fn scan_diff(&self, _repo: &Repository, diff: &Diff, commit: &Commit) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
         let detector = if self.custom_patterns.is_empty() {
@@ -212,9 +467,21 @@ impl GitScanner {
             PatternDetector::with_custom_patterns(&self.custom_patterns)
         };
 
+        let commit_ts = commit_timestamp(commit);
+
         diff.foreach(
             &mut |delta, _progress| {
-                let file_path = delta.new_file().path().unwrap_or(Path::new("unknown"));
+                let file_path = match delta.new_file().path() {
+                    Some(p) => p,
+                    None => {
+                        scan_warn!(
+                            "git",
+                            "diff delta has no file path in commit {}",
+                            commit.id()
+                        );
+                        return true;
+                    }
+                };
 
                 // Skip binary files and files in vendor directories
                 let file_context = ContextAnalyzer::analyze_file(file_path);
@@ -244,10 +511,7 @@ impl GitScanner {
                                 column_end: content.len(),
                                 commit_hash: Some(commit.id().to_string()),
                                 commit_author: commit.author().name().map(|s| s.to_string()),
-                                commit_date: Some(
-                                    chrono::DateTime::from_timestamp(commit.time().seconds(), 0)
-                                        .unwrap_or_default(),
-                                ),
+                                commit_date: Some(commit_ts),
                             };
 
                             let context = ContextAnalyzer::build_context(
@@ -284,6 +548,10 @@ impl GitScanner {
                 filesystem_scanner.with_custom_patterns(self.custom_patterns.clone());
         }
 
+        if let Some(depth) = self.max_fs_depth {
+            filesystem_scanner = filesystem_scanner.with_max_fs_depth(depth);
+        }
+
         filesystem_scanner.scan()
     }
 
@@ -298,12 +566,20 @@ impl GitScanner {
             let oid = oid?;
             let commit = repo.find_commit(oid)?;
 
+            let author_name = commit
+                .author()
+                .name()
+                .unwrap_or("<non-UTF-8 author>")
+                .to_string();
+            let message = commit
+                .message()
+                .unwrap_or("<non-UTF-8 message>")
+                .to_string();
             commits.push(CommitInfo {
                 hash: commit.id().to_string(),
-                author: commit.author().name().unwrap_or("Unknown").to_string(),
-                message: commit.message().unwrap_or("").to_string(),
-                timestamp: chrono::DateTime::from_timestamp(commit.time().seconds(), 0)
-                    .unwrap_or_default(),
+                author: author_name,
+                message,
+                timestamp: commit_timestamp(&commit),
             });
         }
 
@@ -323,6 +599,7 @@ pub struct CommitInfo {
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     fn create_test_repo() -> Result<(TempDir, Repository)> {

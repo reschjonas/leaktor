@@ -27,7 +27,15 @@ impl SlackValidator {
             .send()
             .await?;
 
-        if response.status().is_success() {
+        let status = response.status();
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            anyhow::bail!("429 Too Many Requests from slack.com");
+        }
+        if status.is_server_error() {
+            anyhow::bail!("Server error {} from slack.com", status.as_u16());
+        }
+
+        if status.is_success() {
             let body: serde_json::Value = response.json().await?;
             Ok(body.get("ok").and_then(|v| v.as_bool()).unwrap_or(false))
         } else {
@@ -48,6 +56,12 @@ impl SlackValidator {
         // Slack webhooks return 400 for empty payloads but 404/410 for invalid URLs
         // A 400 means the webhook exists but payload was bad = valid webhook
         let status = response.status().as_u16();
+        if status == 429 {
+            anyhow::bail!("429 Too Many Requests from slack.com webhook");
+        }
+        if status >= 500 {
+            anyhow::bail!("Server error {} from slack.com webhook", status);
+        }
         Ok(status == 400 || status == 200)
     }
 }

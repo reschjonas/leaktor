@@ -11,6 +11,7 @@
 
 use crate::detectors::{ContextAnalyzer, PatternDetector};
 use crate::models::{Context, Finding, Location};
+use crate::scan_warn;
 use anyhow::Result;
 use std::path::Path;
 
@@ -107,7 +108,15 @@ fn scan_terraform_state(
     // Parse as JSON
     let value: serde_json::Value = match serde_json::from_str(content) {
         Ok(v) => v,
-        Err(_) => return Ok(findings),
+        Err(e) => {
+            scan_warn!(
+                "parse",
+                "failed to parse {} as Terraform state JSON: {}",
+                path.display(),
+                e
+            );
+            return Ok(findings);
+        }
     };
 
     // Recursively walk all string values looking for secrets
@@ -144,12 +153,42 @@ fn walk_json_values(
     findings: &mut Vec<Finding>,
     json_path: &str,
 ) {
+    walk_json_values_inner(
+        value, path, file_context, detector, entropy_threshold, findings, json_path, None,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+/// Inner recursive walker that also receives the parent JSON key name.
+/// When a string value is encountered under an object key, the key name is
+/// combined with the value (`key=value`) before scanning so that
+/// context-dependent patterns (e.g. `aws_secret_access_key=...`) can match.
+/// This mirrors the approach used by the Docker Compose scanner.
+fn walk_json_values_inner(
+    value: &serde_json::Value,
+    path: &Path,
+    file_context: &crate::detectors::context::FileContext,
+    detector: &PatternDetector,
+    entropy_threshold: f64,
+    findings: &mut Vec<Finding>,
+    json_path: &str,
+    parent_key: Option<&str>,
+) {
     match value {
         serde_json::Value::String(s) => {
             if s.len() < 8 || s.len() > 5000 {
                 return;
             }
-            let matches = detector.scan_line_with_positions(s, entropy_threshold);
+
+            // Combine key=value so context-dependent patterns can match
+            // (e.g. "secret": "wJalr..." becomes "secret=wJalr..." for scanning)
+            let combined = if let Some(key) = parent_key {
+                format!("{}={}", key, s)
+            } else {
+                s.clone()
+            };
+
+            let matches = detector.scan_line_with_positions(&combined, entropy_threshold);
             for m in matches {
                 let context = Context {
                     line_before: Some(format!("JSON path: {}", json_path)),
@@ -179,7 +218,7 @@ fn walk_json_values(
                 } else {
                     format!("{}.{}", json_path, k)
                 };
-                walk_json_values(
+                walk_json_values_inner(
                     v,
                     path,
                     file_context,
@@ -187,13 +226,14 @@ fn walk_json_values(
                     entropy_threshold,
                     findings,
                     &child_path,
+                    Some(k),
                 );
             }
         }
         serde_json::Value::Array(arr) => {
             for (i, v) in arr.iter().enumerate() {
                 let child_path = format!("{}[{}]", json_path, i);
-                walk_json_values(
+                walk_json_values_inner(
                     v,
                     path,
                     file_context,
@@ -201,6 +241,7 @@ fn walk_json_values(
                     entropy_threshold,
                     findings,
                     &child_path,
+                    None,
                 );
             }
         }
@@ -296,7 +337,15 @@ fn scan_kubernetes_secret(
     for doc in serde_yaml::Deserializer::from_str(content) {
         let value: serde_yaml::Value = match serde_yaml::Value::deserialize(doc) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(e) => {
+                scan_warn!(
+                    "parse",
+                    "failed to parse YAML document in {}: {}",
+                    path.display(),
+                    e
+                );
+                continue;
+            }
         };
 
         // Check if this doc is a K8s Secret
@@ -319,9 +368,18 @@ fn scan_kubernetes_secret(
                 {
                     Ok(bytes) => match String::from_utf8(bytes) {
                         Ok(s) => s,
-                        Err(_) => continue,
+                        Err(_) => continue, // binary data, not a text secret
                     },
-                    Err(_) => continue,
+                    Err(e) => {
+                        scan_warn!(
+                            "parse",
+                            "invalid base64 in K8s Secret .data.{} in {}: {}",
+                            key_str,
+                            path.display(),
+                            e
+                        );
+                        continue;
+                    }
                 };
 
                 if decoded.len() < 4 {
@@ -373,7 +431,15 @@ fn scan_docker_compose(
 
     let value: serde_yaml::Value = match serde_yaml::from_str(content) {
         Ok(v) => v,
-        Err(_) => return Ok(findings),
+        Err(e) => {
+            scan_warn!(
+                "parse",
+                "failed to parse {} as Docker Compose YAML: {}",
+                path.display(),
+                e
+            );
+            return Ok(findings);
+        }
     };
 
     // Walk services -> each service -> environment
@@ -492,14 +558,30 @@ fn scan_cloudformation(
     // Try JSON first, then YAML
     let value: serde_json::Value = if let Ok(v) = serde_json::from_str(content) {
         v
-    } else if let Ok(yaml_val) = serde_yaml::from_str::<serde_yaml::Value>(content) {
-        // Convert YAML to JSON for uniform handling
-        match serde_json::to_value(yaml_val) {
-            Ok(v) => v,
-            Err(_) => return Ok(findings),
-        }
     } else {
-        return Ok(findings);
+        match serde_yaml::from_str::<serde_yaml::Value>(content) {
+            Ok(yaml_val) => match serde_json::to_value(yaml_val) {
+                Ok(v) => v,
+                Err(e) => {
+                    scan_warn!(
+                        "parse",
+                        "failed to convert CloudFormation YAML to JSON in {}: {}",
+                        path.display(),
+                        e
+                    );
+                    return Ok(findings);
+                }
+            },
+            Err(e) => {
+                scan_warn!(
+                    "parse",
+                    "failed to parse {} as CloudFormation (JSON/YAML): {}",
+                    path.display(),
+                    e
+                );
+                return Ok(findings);
+            }
+        }
     };
 
     // Scan Parameters for Default values

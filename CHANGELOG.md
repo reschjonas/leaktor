@@ -5,10 +5,26 @@ All notable changes to Leaktor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-08
+
+### Fixed
+
+- **Allowlist misconfiguration guard** -- Allowlist rules with typos in field names (e.g. `secret_type` instead of `secret_types`) were silently ignored, causing the rule to have no criteria and act as a wildcard that suppresses all findings. Added `#[serde(deny_unknown_fields)]` to reject unknown fields with a clear error message, and a safety guard that prevents empty rules from matching any finding.
+- **SIGPIPE handling** -- Piping output to commands that close early (e.g. `leaktor list | head`) caused a panic (exit code 101). Now terminates cleanly with signal 13 (exit code 141), matching standard Unix CLI behavior.
+
+### Changed
+
+- Updated documentation: fixed duplicated severity tags in terminal examples, corrected comparison data (Gitleaks ~220 rules, TruffleHog 900+ detectors), updated CI action versions, added missing v0.3.0 feature documentation.
+
+[0.4.0]: https://github.com/reschjonas/leaktor/compare/v0.3.0...v0.4.0
+
 ## [0.3.0] - 2026-02-07
 
 ### Added
 
+- **`leaktor scan-s3`** -- scan S3 bucket objects for secrets. Uses the standard AWS credential chain. Supports `--prefix` to scope to a key prefix, `--region` override, and all standard output/validation flags. Binary objects and files >5 MB are automatically skipped.
+- **`leaktor scan-docker`** -- scan Docker image filesystems for secrets. Pulls the image (unless `--no-pull`), exports the container filesystem, and scans text files while skipping system directories. Requires a running Docker daemon.
+- **Feature flags** -- S3 and Docker scanners are optional features (`s3`, `docker`), enabled by default. Install with `--no-default-features` for a smaller binary without cloud/container dependencies.
 - **`leaktor init`** -- one-command project setup: creates config, ignore file, pre-commit hook, GitHub Actions workflow, and optional baseline. Supports `--no-hook`, `--no-ci`, `--baseline` flags. Idempotent (skips existing files on re-run).
 - **`leaktor trace`** -- blast radius analysis: find everywhere a secret is referenced across the codebase. Supports tracing by value, by secret type (`--type`), or from a file (`--file`). Shows categorized blast radius summary.
 - **`leaktor diff`** -- scan comparison: compare two JSON scan results to see added, removed, and unchanged findings. Supports console and JSON output formats.
@@ -18,12 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Terraform state (`.tfstate`): JSON values recursively walked + base64 blobs decoded
   - Docker Compose: `environment:` values scanned (both mapping and list styles)
   - CloudFormation: `Parameters` defaults and `Resources` properties scanned
-- 61 new secret patterns (146 types total, 152 regex patterns): 1Password, Age, Alibaba, Artifactory, Asana, Azure AD, Beamer, Bitwarden, Clojars, Codecov, Coinbase, Contentful, Dropbox, DSA, Duffel, Dynatrace, EasyPost, Facebook, Flutterwave, Frame.io, FreshBooks, GitHub App/Fine-grained PAT, Google OAuth, Infracost, Intercom, Kraken, Lob, MessageBird, Neon, New Relic Browser, NY Times, PKCS8, PlanetScale, Postman, Prefect, Railway, RapidAPI, ReadMe, Scalingo, Sourcegraph, Tailscale, Tencent, Trello, Turborepo, Twitch, Twitter, Typeform, Vault Batch, Yandex, Zendesk
+- Massive secret pattern expansion (888 types total, 894 regex patterns, ~80 services): 1Password, Age, Alibaba, Artifactory, Asana, Azure AD, Beamer, Bitwarden, Clojars, Codecov, Coinbase, Contentful, Dropbox, DSA, Duffel, Dynatrace, EasyPost, Facebook, Flutterwave, Frame.io, FreshBooks, GitHub App/Fine-grained PAT, Google OAuth, Infracost, Intercom, Kraken, Lob, MessageBird, Neon, New Relic Browser, NY Times, PKCS8, PlanetScale, Postman, Prefect, Railway, RapidAPI, ReadMe, Scalingo, Sourcegraph, Tailscale, Tencent, Trello, Turborepo, Twitch, Twitter, Typeform, Vault Batch, Yandex, Zendesk, and hundreds more services via comprehensive API key pattern coverage
 - DSL pattern configuration via `.leaktor.toml` custom patterns (name, regex, severity, confidence, description)
 - Rule-based allowlisting in `.leaktor.toml` (match by secret type, file path glob, value regex, severity)
 
 ### Fixed
 
+- `.txt` files are no longer classified as documentation -- this was silently downgrading severity for all findings in `.txt` files (CRITICAL -> High, HIGH -> Medium, etc.), including custom patterns with explicit severity overrides.
+- Terraform state scanner now combines JSON key names with values (e.g. `secret=wJalr...`) before scanning, matching context-dependent patterns that require keyword prefixes. Previously only self-identifying patterns (like `AKIA` prefix) were found.
+- Auto-exclude scan output files (`*.sarif`, `leaktor-report.html`, common report filenames) from default filesystem scanning to prevent re-scanning previous results.
+- AWS keypair validation now pairs access keys and secret keys found in the same file for STS `GetCallerIdentity` validation, instead of format-only checks.
 - `has_repeated_pattern` in context analysis was too aggressive -- raised threshold from 5 to 8 consecutive chars, excluded structural characters (`-`, `=`, `.`, `_`), and required 60% coverage for repeated short patterns. Fixes false negatives on PEM headers and tokens with common repeated characters.
 - GitScanner now propagates `include_deps` to its internal FilesystemScanner
 
@@ -65,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `leaktor list` output reorganized into 16 categories with deduplication and pattern count
 - README rewritten
 
-[0.2.0]: https://github.com/reschjonas/leaktor/releases/tag/v0.2.0
+[0.2.0]: https://github.com/reschjonas/leaktor/compare/v0.1.0...v0.2.0
 
 ## [0.1.0] - 2025-11-17
 
@@ -88,11 +108,10 @@ First public release of Leaktor -- a secrets scanner with pattern matching, entr
 
 ### Technical Details
 
-- Built with Rust 2024 Edition
+- Built with Rust 2021 Edition
 - Async validation with Tokio
 - Pattern matching with Regex
 - Git integration with git2
 - Parallel processing with Rayon
 
-[0.2.0]: https://github.com/reschjonas/leaktor/releases/tag/v0.2.0
 [0.1.0]: https://github.com/reschjonas/leaktor/releases/tag/v0.1.0
