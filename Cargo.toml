@@ -30,8 +30,8 @@ indicatif = "0.17"
 regex = "1.11"
 lazy_static = "1.5"
 
-# Git operations
-git2 = "0.19"
+# Git operations (no SSH/HTTPS needed, local repo access only)
+git2 = { version = "0.19", default-features = false }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -41,9 +41,8 @@ toml = "0.8"
 
 # Async runtime and HTTP
 tokio = { version = "1.41", features = ["full"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 async-trait = "0.1"
-openssl = { version = "0.10", optional = true }
 
 # Error handling
 anyhow = "1.0"
@@ -69,9 +68,6 @@ entropy = "0.4"
 tempfile = "3.14"
 assert_cmd = "2.0"
 predicates = "3.1"
-
-[features]
-vendored-openssl = ["openssl/vendored"]
 
 [[bin]]
 name = "leaktor"
