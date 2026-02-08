@@ -52,10 +52,7 @@ impl Validator for GitLabValidator {
     }
 
     fn supports(&self, secret_type: &SecretType) -> bool {
-        matches!(
-            secret_type,
-            SecretType::GitLabPat | SecretType::GitLabToken
-        )
+        matches!(secret_type, SecretType::GitLabPat | SecretType::GitLabToken)
     }
 }
 

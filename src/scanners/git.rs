@@ -36,7 +36,10 @@ impl GitScanner {
         self
     }
 
-    pub fn with_custom_patterns(mut self, patterns: Vec<crate::config::settings::CustomPattern>) -> Self {
+    pub fn with_custom_patterns(
+        mut self,
+        patterns: Vec<crate::config::settings::CustomPattern>,
+    ) -> Self {
         self.custom_patterns = patterns;
         self
     }
@@ -146,12 +149,7 @@ impl GitScanner {
 
     /// Scan only the commits in a specific range (from..to).
     /// `from` is exclusive, `to` is inclusive.
-    fn scan_commit_range(
-        &self,
-        repo: &Repository,
-        from: &str,
-        to: &str,
-    ) -> Result<Vec<Finding>> {
+    fn scan_commit_range(&self, repo: &Repository, from: &str, to: &str) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
 
         let from_obj = repo
@@ -282,7 +280,8 @@ impl GitScanner {
             .with_include_deps(self.include_deps);
 
         if !self.custom_patterns.is_empty() {
-            filesystem_scanner = filesystem_scanner.with_custom_patterns(self.custom_patterns.clone());
+            filesystem_scanner =
+                filesystem_scanner.with_custom_patterns(self.custom_patterns.clone());
         }
 
         filesystem_scanner.scan()
@@ -374,14 +373,16 @@ mod tests {
             .with_history(false)
             .with_entropy_threshold(3.0);
         let findings = scanner.scan()?;
-        assert!(!findings.is_empty(), "Should find secrets in working directory even without history scanning");
+        assert!(
+            !findings.is_empty(),
+            "Should find secrets in working directory even without history scanning"
+        );
         Ok(())
     }
 
     #[test]
     fn test_git_scanner_with_max_depth() {
-        let scanner = GitScanner::new(PathBuf::from("."))
-            .with_max_depth(10);
+        let scanner = GitScanner::new(PathBuf::from(".")).with_max_depth(10);
         assert_eq!(scanner.max_depth, Some(10));
     }
 }

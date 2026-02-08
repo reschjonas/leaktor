@@ -38,7 +38,12 @@ impl SlackValidator {
     /// Validate Slack webhook by sending a dry-run style check
     async fn validate_webhook(&self, url: &str) -> Result<bool> {
         // We just check if the URL responds - we don't actually post a message
-        let response = self.client.post(url).json(&serde_json::json!({})).send().await?;
+        let response = self
+            .client
+            .post(url)
+            .json(&serde_json::json!({}))
+            .send()
+            .await?;
 
         // Slack webhooks return 400 for empty payloads but 404/410 for invalid URLs
         // A 400 means the webhook exists but payload was bad = valid webhook

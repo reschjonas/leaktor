@@ -198,12 +198,7 @@ impl ConsoleOutput {
     pub fn print_scan_complete(&self, findings_count: usize) {
         println!("{}", "═".repeat(50).bright_cyan());
         if findings_count == 0 {
-            println!(
-                "{}",
-                "No secrets detected."
-                    .green()
-                    .bold()
-            );
+            println!("{}", "No secrets detected.".green().bold());
         } else {
             println!(
                 "{}",

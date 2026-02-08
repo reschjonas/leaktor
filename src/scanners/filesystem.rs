@@ -27,7 +27,10 @@ impl FilesystemScanner {
         }
     }
 
-    pub fn with_custom_patterns(mut self, patterns: Vec<crate::config::settings::CustomPattern>) -> Self {
+    pub fn with_custom_patterns(
+        mut self,
+        patterns: Vec<crate::config::settings::CustomPattern>,
+    ) -> Self {
         self.custom_patterns = patterns;
         self
     }
@@ -287,24 +290,17 @@ impl FilesystemScanner {
     fn is_likely_binary(&self, path: &Path) -> bool {
         let binary_extensions = [
             // Executables & Libraries
-            "exe", "dll", "so", "dylib", "bin", "com", "msi",
-            // Object files
-            "o", "a", "lib", "obj", "class", "pyc", "pyo", "elc", "beam",
-            // Archives
+            "exe", "dll", "so", "dylib", "bin", "com", "msi", // Object files
+            "o", "a", "lib", "obj", "class", "pyc", "pyo", "elc", "beam", // Archives
             "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "zst", "lz4", "lzma",
             // Images
             "jpg", "jpeg", "png", "gif", "bmp", "ico", "svg", "webp", "tiff", "avif",
             // Audio/Video
-            "mp3", "mp4", "avi", "mov", "mkv", "flac", "wav", "ogg", "webm",
-            // Fonts
-            "woff", "woff2", "ttf", "eot", "otf",
-            // Documents
-            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-            // Data
-            "dat", "db", "sqlite", "sqlite3", "mdb", "parquet", "arrow",
-            // Disk images
-            "iso", "img", "dmg", "vmdk",
-            // Source maps (high false-positive)
+            "mp3", "mp4", "avi", "mov", "mkv", "flac", "wav", "ogg", "webm", // Fonts
+            "woff", "woff2", "ttf", "eot", "otf", // Documents
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", // Data
+            "dat", "db", "sqlite", "sqlite3", "mdb", "parquet", "arrow", // Disk images
+            "iso", "img", "dmg", "vmdk", // Source maps (high false-positive)
             "map",
         ];
 

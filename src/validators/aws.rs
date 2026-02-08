@@ -27,11 +27,7 @@ impl AwsValidator {
     ///
     /// If only an access key is found (no paired secret key), we fall back to
     /// format validation only.
-    async fn validate_with_sts(
-        &self,
-        access_key: &str,
-        secret_key: &str,
-    ) -> Result<bool> {
+    async fn validate_with_sts(&self, access_key: &str, secret_key: &str) -> Result<bool> {
         let region = "us-east-1";
         let service = "sts";
         let host = "sts.amazonaws.com";
@@ -220,7 +216,10 @@ mod tests {
 
         let result = validator.validate(&secret).await;
         assert!(result.is_ok());
-        assert!(result.unwrap(), "Valid AKIA prefix + 20 chars should pass format check");
+        assert!(
+            result.unwrap(),
+            "Valid AKIA prefix + 20 chars should pass format check"
+        );
     }
 
     #[tokio::test]

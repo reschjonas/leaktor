@@ -282,7 +282,10 @@ impl HtmlOutput {
             .filter(|f| f.secret.validated == Some(true))
             .count();
 
-        let _false_positives = findings.iter().filter(|f| f.is_likely_false_positive()).count();
+        let _false_positives = findings
+            .iter()
+            .filter(|f| f.is_likely_false_positive())
+            .count();
 
         html.push_str(&format!(
             r#"
@@ -384,8 +387,16 @@ impl HtmlOutput {
                 ""
             };
 
-            let is_validated = if finding.secret.validated == Some(true) { "true" } else { "false" };
-            let is_false_positive = if finding.is_likely_false_positive() { "true" } else { "false" };
+            let is_validated = if finding.secret.validated == Some(true) {
+                "true"
+            } else {
+                "false"
+            };
+            let is_false_positive = if finding.is_likely_false_positive() {
+                "true"
+            } else {
+                "false"
+            };
 
             html.push_str(&format!(
                 r#"

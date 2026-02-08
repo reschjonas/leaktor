@@ -130,13 +130,20 @@ mod tests {
         // A realistic-looking API key should have high entropy
         let key = "sk_live_51H4gJkLmNoPqRsTuVwXyZ0123456789AbCdEfGh";
         let entropy = EntropyAnalyzer::calculate(key);
-        assert!(entropy > 4.0, "Realistic API key should have high entropy, got: {}", entropy);
+        assert!(
+            entropy > 4.0,
+            "Realistic API key should have high entropy, got: {}",
+            entropy
+        );
     }
 
     #[test]
     fn test_is_high_entropy() {
         assert!(EntropyAnalyzer::is_high_entropy("Xy9#mK2@qL5&", 3.5));
-        assert!(EntropyAnalyzer::is_high_entropy("aB3$xY9#mK2@qL5&pN7!", 4.0));
+        assert!(EntropyAnalyzer::is_high_entropy(
+            "aB3$xY9#mK2@qL5&pN7!",
+            4.0
+        ));
         assert!(!EntropyAnalyzer::is_high_entropy("password", 4.0));
     }
 

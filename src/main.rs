@@ -37,7 +37,12 @@ enum Commands {
         path: PathBuf,
 
         /// Output format: console (default), json, sarif, or html
-        #[arg(short, long, default_value = "console", help = "Output format (console|json|sarif|html)")]
+        #[arg(
+            short,
+            long,
+            default_value = "console",
+            help = "Output format (console|json|sarif|html)"
+        )]
         format: String,
 
         /// Output file path (required for HTML, optional for others)
@@ -53,7 +58,11 @@ enum Commands {
         max_depth: Option<usize>,
 
         /// Entropy threshold for detecting random strings
-        #[arg(long, default_value = "3.5", help = "Entropy threshold (higher = more random)")]
+        #[arg(
+            long,
+            default_value = "3.5",
+            help = "Entropy threshold (higher = more random)"
+        )]
         entropy: f64,
 
         /// Validate detected secrets against their APIs
@@ -89,7 +98,10 @@ enum Commands {
         since_commit: Option<String>,
 
         /// Only scan git commits in a range (format: FROM..TO)
-        #[arg(long, help = "Scan a commit range (e.g., abc1234..def5678 or abc1234..HEAD)")]
+        #[arg(
+            long,
+            help = "Scan a commit range (e.g., abc1234..def5678 or abc1234..HEAD)"
+        )]
         commit_range: Option<String>,
 
         /// Path to a baseline file -- suppress findings already in the baseline
@@ -125,7 +137,11 @@ enum Commands {
         query: Option<String>,
 
         /// Trace by secret type instead of value
-        #[arg(long = "type", short = 't', help = "Secret type to trace (e.g., 'AWS Access Key')")]
+        #[arg(
+            long = "type",
+            short = 't',
+            help = "Secret type to trace (e.g., 'AWS Access Key')"
+        )]
         secret_type: Option<String>,
 
         /// Trace secrets found in a specific file
@@ -152,7 +168,12 @@ enum Commands {
         new: PathBuf,
 
         /// Output format
-        #[arg(short, long, default_value = "console", help = "Output format (console|json)")]
+        #[arg(
+            short,
+            long,
+            default_value = "console",
+            help = "Output format (console|json)"
+        )]
         format: String,
     },
 
@@ -425,8 +446,7 @@ async fn scan_command(
     );
 
     // Track whether structured output goes to stdout (so we keep stdout clean)
-    let structured_to_stdout =
-        (format == "json" || format == "sarif") && output_path.is_none();
+    let structured_to_stdout = (format == "json" || format == "sarif") && output_path.is_none();
 
     // ── Scan ─────────────────────────────────────────────────────────────
 
@@ -448,18 +468,16 @@ async fn scan_command(
     if include_deps && !structured_to_stdout {
         println!(
             "{}",
-            "[i] Scanning dependency directories (node_modules, vendor, .venv, ...)"
-                .dimmed()
+            "[i] Scanning dependency directories (node_modules, vendor, .venv, ...)".dimmed()
         );
     }
 
     let mut findings = if stdin_mode {
         // ── Stdin scanning ───────────────────────────────────────────────
         spinner.set_message("Scanning stdin...");
-        let scanner =
-            StdinScanner::new()
-                .with_entropy_threshold(effective_entropy)
-                .with_custom_patterns(custom_patterns.clone());
+        let scanner = StdinScanner::new()
+            .with_entropy_threshold(effective_entropy)
+            .with_custom_patterns(custom_patterns.clone());
         scanner.scan()?
     } else if path.join(".git").exists() {
         // ── Git repository scanning ──────────────────────────────────────
@@ -840,10 +858,17 @@ exit 0
                     perms.set_mode(0o755);
                     std::fs::set_permissions(&hook_path, perms)?;
                 }
-                println!("  {} Installed {}", "[OK]".green(), "pre-commit hook".bold());
+                println!(
+                    "  {} Installed {}",
+                    "[OK]".green(),
+                    "pre-commit hook".bold()
+                );
             }
         } else {
-            println!("  {} No .git directory found (skipping hook)", "skip".dimmed());
+            println!(
+                "  {} No .git directory found (skipping hook)",
+                "skip".dimmed()
+            );
         }
     }
 
@@ -896,9 +921,11 @@ jobs:
     // 5. Create baseline
     if create_baseline {
         println!();
-        println!("  {} Running initial scan to create baseline...", "...".dimmed());
-        let scanner = FilesystemScanner::new(project_root.clone())
-            .with_entropy_threshold(3.5);
+        println!(
+            "  {} Running initial scan to create baseline...",
+            "...".dimmed()
+        );
+        let scanner = FilesystemScanner::new(project_root.clone()).with_entropy_threshold(3.5);
         let findings = scanner.scan()?;
         let baseline = Baseline::from_findings(&findings);
         let baseline_path = project_root.join(".leaktor-baseline.json");
@@ -917,10 +944,7 @@ jobs:
         "  1. Edit {} to customize patterns and thresholds",
         ".leaktor.toml".cyan()
     );
-    println!(
-        "  2. Run {} to scan your project",
-        "leaktor scan".cyan()
-    );
+    println!("  2. Run {} to scan your project", "leaktor scan".cyan());
     if create_baseline {
         println!(
             "  3. Use {} to suppress existing findings",
@@ -972,7 +996,11 @@ fn trace_command(
             }
         }
         if search_terms.is_empty() {
-            println!("  {} No secrets found in {}", "[!]".yellow(), file_path.display());
+            println!(
+                "  {} No secrets found in {}",
+                "[!]".yellow(),
+                file_path.display()
+            );
             return Ok(());
         }
     }
@@ -986,7 +1014,13 @@ fn trace_command(
         let type_lower = type_name.to_lowercase();
         let matching: Vec<_> = all_findings
             .iter()
-            .filter(|f| f.secret.secret_type.as_str().to_lowercase().contains(&type_lower))
+            .filter(|f| {
+                f.secret
+                    .secret_type
+                    .as_str()
+                    .to_lowercase()
+                    .contains(&type_lower)
+            })
             .collect();
 
         if matching.is_empty() {
@@ -1045,7 +1079,12 @@ fn trace_command(
 
     // Step 4: For value-based search, search for the string across all files
     for (label, search_value) in &search_terms {
-        println!("  {} Tracing: {} ({})", "[*]".dimmed(), &search_value[..search_value.len().min(20)], label);
+        println!(
+            "  {} Tracing: {} ({})",
+            "[*]".dimmed(),
+            &search_value[..search_value.len().min(20)],
+            label
+        );
         println!();
 
         // Search all text files for this value
@@ -1089,12 +1128,7 @@ fn trace_command(
                 } else {
                     line_content.clone()
                 };
-                println!(
-                    "    {} {}:{}",
-                    "->".dimmed(),
-                    file_path.display(),
-                    line_num
-                );
+                println!("    {} {}:{}", "->".dimmed(), file_path.display(), line_num);
                 println!("      {}", display_line.dimmed());
             }
         }
@@ -1105,10 +1139,28 @@ fn trace_command(
     if let Some(ref q) = query {
         // Check if this value appears in common sensitive locations
         let sensitive_patterns = [
-            ("Environment files", vec![".env", ".env.local", ".env.production"]),
-            ("Config files", vec![".toml", ".yaml", ".yml", ".json", ".ini", ".conf"]),
-            ("CI/CD", vec!["Jenkinsfile", "Dockerfile", ".github/", ".gitlab-ci", ".circleci"]),
-            ("Infrastructure", vec![".tf", ".tfvars", "docker-compose", "k8s", "helm"]),
+            (
+                "Environment files",
+                vec![".env", ".env.local", ".env.production"],
+            ),
+            (
+                "Config files",
+                vec![".toml", ".yaml", ".yml", ".json", ".ini", ".conf"],
+            ),
+            (
+                "CI/CD",
+                vec![
+                    "Jenkinsfile",
+                    "Dockerfile",
+                    ".github/",
+                    ".gitlab-ci",
+                    ".circleci",
+                ],
+            ),
+            (
+                "Infrastructure",
+                vec![".tf", ".tfvars", "docker-compose", "k8s", "helm"],
+            ),
         ];
 
         let mut blast_summary: Vec<(&str, usize)> = Vec::new();
@@ -1127,7 +1179,9 @@ fn trace_command(
                 if content.contains(q.as_str()) {
                     for (category, patterns) in &sensitive_patterns {
                         if patterns.iter().any(|pat| path_str.contains(pat)) {
-                            if let Some(entry) = blast_summary.iter_mut().find(|(c, _)| c == category) {
+                            if let Some(entry) =
+                                blast_summary.iter_mut().find(|(c, _)| c == category)
+                            {
                                 entry.1 += 1;
                             } else {
                                 blast_summary.push((category, 1));
@@ -1141,8 +1195,20 @@ fn trace_command(
         if !blast_summary.is_empty() {
             println!("{}", "  Blast Radius Summary".bold().underline());
             for (category, count) in &blast_summary {
-                let severity_color = if *count > 3 { "[!!]" } else if *count > 1 { "[!]" } else { "[-]" };
-                println!("    {} {} ({} file{})", severity_color, category, count, if *count == 1 { "" } else { "s" });
+                let severity_color = if *count > 3 {
+                    "[!!]"
+                } else if *count > 1 {
+                    "[!]"
+                } else {
+                    "[-]"
+                };
+                println!(
+                    "    {} {} ({} file{})",
+                    severity_color,
+                    category,
+                    count,
+                    if *count == 1 { "" } else { "s" }
+                );
             }
             println!();
         }
@@ -1240,10 +1306,26 @@ fn diff_command(old_path: PathBuf, new_path: PathBuf, format: String) -> Result<
         if !added.is_empty() {
             println!("  {}", "New findings:".red().bold());
             for f in &added {
-                let sev = f.secret.get("severity").and_then(|s| s.as_str()).unwrap_or("?");
-                let stype = f.secret.get("secret_type").and_then(|s| s.as_str()).unwrap_or("Unknown");
-                let file = f.location.get("file_path").and_then(|s| s.as_str()).unwrap_or("?");
-                let line = f.location.get("line_number").and_then(|l| l.as_u64()).unwrap_or(0);
+                let sev = f
+                    .secret
+                    .get("severity")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("?");
+                let stype = f
+                    .secret
+                    .get("secret_type")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("Unknown");
+                let file = f
+                    .location
+                    .get("file_path")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("?");
+                let line = f
+                    .location
+                    .get("line_number")
+                    .and_then(|l| l.as_u64())
+                    .unwrap_or(0);
                 println!(
                     "    {} [{}] {} at {}:{}",
                     "+".red(),
@@ -1260,16 +1342,22 @@ fn diff_command(old_path: PathBuf, new_path: PathBuf, format: String) -> Result<
         if !removed.is_empty() {
             println!("  {}", "Fixed findings:".green().bold());
             for f in &removed {
-                let stype = f.secret.get("secret_type").and_then(|s| s.as_str()).unwrap_or("Unknown");
-                let file = f.location.get("file_path").and_then(|s| s.as_str()).unwrap_or("?");
-                let line = f.location.get("line_number").and_then(|l| l.as_u64()).unwrap_or(0);
-                println!(
-                    "    {} {} at {}:{}",
-                    "-".green(),
-                    stype,
-                    file,
-                    line
-                );
+                let stype = f
+                    .secret
+                    .get("secret_type")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("Unknown");
+                let file = f
+                    .location
+                    .get("file_path")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("?");
+                let line = f
+                    .location
+                    .get("line_number")
+                    .and_then(|l| l.as_u64())
+                    .unwrap_or(0);
+                println!("    {} {} at {}:{}", "-".green(), stype, file, line);
             }
             println!();
         }
@@ -1297,10 +1385,22 @@ struct DiffFinding {
 }
 
 fn diff_fingerprint(f: &DiffFinding) -> String {
-    let secret_type = f.secret.get("secret_type").and_then(|s| s.as_str()).unwrap_or("");
+    let secret_type = f
+        .secret
+        .get("secret_type")
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
     let value = f.secret.get("value").and_then(|s| s.as_str()).unwrap_or("");
-    let file = f.location.get("file_path").and_then(|s| s.as_str()).unwrap_or("");
-    let line = f.location.get("line_number").and_then(|l| l.as_u64()).unwrap_or(0);
+    let file = f
+        .location
+        .get("file_path")
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+    let line = f
+        .location
+        .get("line_number")
+        .and_then(|l| l.as_u64())
+        .unwrap_or(0);
     format!("{}|{}|{}|{}", secret_type, value, file, line)
 }
 

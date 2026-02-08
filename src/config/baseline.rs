@@ -77,8 +77,8 @@ impl Baseline {
 
     /// Load a baseline from a JSON file.
     pub fn load(path: &Path) -> Result<Self> {
-        let content =
-            fs::read_to_string(path).with_context(|| format!("Failed to read baseline file: {}", path.display()))?;
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read baseline file: {}", path.display()))?;
         let baseline: Baseline = serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse baseline file: {}", path.display()))?;
         Ok(baseline)
@@ -170,14 +170,20 @@ mod tests {
     fn test_fingerprint_deterministic() {
         let f1 = make_finding("src/main.rs", 10, "AKIAIOSFODNN7EXAMPLE");
         let f2 = make_finding("src/main.rs", 10, "AKIAIOSFODNN7EXAMPLE");
-        assert_eq!(Fingerprint::from_finding(&f1), Fingerprint::from_finding(&f2));
+        assert_eq!(
+            Fingerprint::from_finding(&f1),
+            Fingerprint::from_finding(&f2)
+        );
     }
 
     #[test]
     fn test_fingerprint_different_for_different_values() {
         let f1 = make_finding("src/main.rs", 10, "AKIAIOSFODNN7EXAMPLE");
         let f2 = make_finding("src/main.rs", 10, "AKIAIOSFODNN7OTHERTK");
-        assert_ne!(Fingerprint::from_finding(&f1), Fingerprint::from_finding(&f2));
+        assert_ne!(
+            Fingerprint::from_finding(&f1),
+            Fingerprint::from_finding(&f2)
+        );
     }
 
     #[test]
@@ -185,7 +191,10 @@ mod tests {
         let f1 = make_finding("src/main.rs", 10, "AKIAIOSFODNN7EXAMPLE");
         let f2 = make_finding("src/main.rs", 42, "AKIAIOSFODNN7EXAMPLE");
         // Same file + same value = same fingerprint (line number is NOT part of fingerprint)
-        assert_eq!(Fingerprint::from_finding(&f1), Fingerprint::from_finding(&f2));
+        assert_eq!(
+            Fingerprint::from_finding(&f1),
+            Fingerprint::from_finding(&f2)
+        );
     }
 
     #[test]

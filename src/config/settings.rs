@@ -135,8 +135,7 @@ impl AllowlistRule {
         severity_name: &str,
     ) -> bool {
         // Check secret_types (if specified)
-        if !self.secret_types.is_empty()
-            && !self.secret_types.iter().any(|t| t == secret_type_name)
+        if !self.secret_types.is_empty() && !self.secret_types.iter().any(|t| t == secret_type_name)
         {
             return false;
         }

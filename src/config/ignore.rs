@@ -144,7 +144,9 @@ impl IgnoreManager {
         content.push_str("# Leaktor ignore patterns\n");
         content.push_str("# Patterns support wildcards (*)\n");
         content.push_str("# Lines starting with # are comments\n");
-        content.push_str("# Use fingerprint:<hash> or a bare 64-char hex hash to allowlist by fingerprint\n\n");
+        content.push_str(
+            "# Use fingerprint:<hash> or a bare 64-char hex hash to allowlist by fingerprint\n\n",
+        );
 
         for pattern in &self.patterns {
             content.push_str(pattern);

@@ -79,10 +79,18 @@ pub fn scan_structured_file(
     entropy_threshold: f64,
 ) -> Result<Vec<Finding>> {
     match format {
-        StructuredFormat::TerraformState => scan_terraform_state(path, content, detector, entropy_threshold),
-        StructuredFormat::KubernetesSecret => scan_kubernetes_secret(path, content, detector, entropy_threshold),
-        StructuredFormat::DockerCompose => scan_docker_compose(path, content, detector, entropy_threshold),
-        StructuredFormat::CloudFormation => scan_cloudformation(path, content, detector, entropy_threshold),
+        StructuredFormat::TerraformState => {
+            scan_terraform_state(path, content, detector, entropy_threshold)
+        }
+        StructuredFormat::KubernetesSecret => {
+            scan_kubernetes_secret(path, content, detector, entropy_threshold)
+        }
+        StructuredFormat::DockerCompose => {
+            scan_docker_compose(path, content, detector, entropy_threshold)
+        }
+        StructuredFormat::CloudFormation => {
+            scan_cloudformation(path, content, detector, entropy_threshold)
+        }
     }
 }
 
@@ -104,10 +112,25 @@ fn scan_terraform_state(
 
     // Recursively walk all string values looking for secrets
     let file_context = ContextAnalyzer::analyze_file(path);
-    walk_json_values(&value, path, &file_context, detector, entropy_threshold, &mut findings, "");
+    walk_json_values(
+        &value,
+        path,
+        &file_context,
+        detector,
+        entropy_threshold,
+        &mut findings,
+        "",
+    );
 
     // Also look for base64-encoded blobs and decode them
-    walk_json_decode_base64(&value, path, &file_context, detector, entropy_threshold, &mut findings);
+    walk_json_decode_base64(
+        &value,
+        path,
+        &file_context,
+        detector,
+        entropy_threshold,
+        &mut findings,
+    );
 
     Ok(findings)
 }
@@ -156,13 +179,29 @@ fn walk_json_values(
                 } else {
                     format!("{}.{}", json_path, k)
                 };
-                walk_json_values(v, path, file_context, detector, entropy_threshold, findings, &child_path);
+                walk_json_values(
+                    v,
+                    path,
+                    file_context,
+                    detector,
+                    entropy_threshold,
+                    findings,
+                    &child_path,
+                );
             }
         }
         serde_json::Value::Array(arr) => {
             for (i, v) in arr.iter().enumerate() {
                 let child_path = format!("{}[{}]", json_path, i);
-                walk_json_values(v, path, file_context, detector, entropy_threshold, findings, &child_path);
+                walk_json_values(
+                    v,
+                    path,
+                    file_context,
+                    detector,
+                    entropy_threshold,
+                    findings,
+                    &child_path,
+                );
             }
         }
         _ => {}
@@ -185,7 +224,8 @@ fn walk_json_decode_base64(
                 if let Ok(decoded_bytes) = base64::engine::general_purpose::STANDARD.decode(s) {
                     if let Ok(decoded) = String::from_utf8(decoded_bytes) {
                         if decoded.len() >= 8 {
-                            let matches = detector.scan_line_with_positions(&decoded, entropy_threshold);
+                            let matches =
+                                detector.scan_line_with_positions(&decoded, entropy_threshold);
                             for m in matches {
                                 let context = Context {
                                     line_before: Some("[base64 decoded]".to_string()),
@@ -214,12 +254,26 @@ fn walk_json_decode_base64(
         }
         serde_json::Value::Object(map) => {
             for v in map.values() {
-                walk_json_decode_base64(v, path, file_context, detector, entropy_threshold, findings);
+                walk_json_decode_base64(
+                    v,
+                    path,
+                    file_context,
+                    detector,
+                    entropy_threshold,
+                    findings,
+                );
             }
         }
         serde_json::Value::Array(arr) => {
             for v in arr {
-                walk_json_decode_base64(v, path, file_context, detector, entropy_threshold, findings);
+                walk_json_decode_base64(
+                    v,
+                    path,
+                    file_context,
+                    detector,
+                    entropy_threshold,
+                    findings,
+                );
             }
         }
         _ => {}
@@ -261,7 +315,8 @@ fn scan_kubernetes_secret(
                 };
 
                 // Decode base64
-                let decoded = match base64::engine::general_purpose::STANDARD.decode(val_str.trim()) {
+                let decoded = match base64::engine::general_purpose::STANDARD.decode(val_str.trim())
+                {
                     Ok(bytes) => match String::from_utf8(bytes) {
                         Ok(s) => s,
                         Err(_) => continue,
@@ -325,7 +380,15 @@ fn scan_docker_compose(
     if let Some(services) = value.get("services").and_then(|s| s.as_mapping()) {
         for (_svc_name, svc_val) in services {
             if let Some(env) = svc_val.get("environment") {
-                scan_compose_environment(path, content, env, &file_context, detector, entropy_threshold, &mut findings);
+                scan_compose_environment(
+                    path,
+                    content,
+                    env,
+                    &file_context,
+                    detector,
+                    entropy_threshold,
+                    &mut findings,
+                );
             }
         }
     }
@@ -472,7 +535,15 @@ fn scan_cloudformation(
 
     // Recursively scan Resources for hardcoded secrets in properties
     if let Some(resources) = value.get("Resources") {
-        walk_json_values(resources, path, &file_context, detector, entropy_threshold, &mut findings, "Resources");
+        walk_json_values(
+            resources,
+            path,
+            &file_context,
+            detector,
+            entropy_threshold,
+            &mut findings,
+            "Resources",
+        );
     }
 
     Ok(findings)
@@ -501,9 +572,9 @@ fn looks_like_base64(s: &str) -> bool {
         return false;
     }
     let trimmed = s.trim();
-    trimmed
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=' || c == '\n' || c == '\r')
+    trimmed.chars().all(|c| {
+        c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=' || c == '\n' || c == '\r'
+    })
 }
 
 use serde::Deserialize;
@@ -525,27 +596,39 @@ mod tests {
     #[test]
     fn test_detect_terraform_state() {
         let path = Path::new("terraform.tfstate");
-        assert_eq!(detect_format(path, "{}"), Some(StructuredFormat::TerraformState));
+        assert_eq!(
+            detect_format(path, "{}"),
+            Some(StructuredFormat::TerraformState)
+        );
     }
 
     #[test]
     fn test_detect_kubernetes_secret() {
         let path = Path::new("secret.yaml");
         let content = "apiVersion: v1\nkind: Secret\ndata:\n  password: cGFzc3dvcmQ=";
-        assert_eq!(detect_format(path, content), Some(StructuredFormat::KubernetesSecret));
+        assert_eq!(
+            detect_format(path, content),
+            Some(StructuredFormat::KubernetesSecret)
+        );
     }
 
     #[test]
     fn test_detect_docker_compose() {
         let path = Path::new("docker-compose.yml");
-        assert_eq!(detect_format(path, "services:"), Some(StructuredFormat::DockerCompose));
+        assert_eq!(
+            detect_format(path, "services:"),
+            Some(StructuredFormat::DockerCompose)
+        );
     }
 
     #[test]
     fn test_detect_cloudformation() {
         let path = Path::new("template.yaml");
         let content = "AWSTemplateFormatVersion: '2010-09-09'\nResources:";
-        assert_eq!(detect_format(path, content), Some(StructuredFormat::CloudFormation));
+        assert_eq!(
+            detect_format(path, content),
+            Some(StructuredFormat::CloudFormation)
+        );
     }
 
     #[test]
@@ -566,7 +649,10 @@ data:
         let path = Path::new("secret.yaml");
         let detector = PatternDetector::new();
         let findings = scan_kubernetes_secret(path, content, &detector, 3.0).unwrap();
-        assert!(!findings.is_empty(), "Should find AWS key in base64-encoded K8s secret");
+        assert!(
+            !findings.is_empty(),
+            "Should find AWS key in base64-encoded K8s secret"
+        );
     }
 
     #[test]
@@ -582,7 +668,10 @@ services:
         let path = Path::new("docker-compose.yml");
         let detector = PatternDetector::new();
         let findings = scan_docker_compose(path, content, &detector, 3.0).unwrap();
-        assert!(!findings.is_empty(), "Should find AWS key in docker-compose environment");
+        assert!(
+            !findings.is_empty(),
+            "Should find AWS key in docker-compose environment"
+        );
     }
 
     #[test]

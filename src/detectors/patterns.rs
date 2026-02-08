@@ -1098,9 +1098,7 @@ impl PatternDetector {
     }
 
     /// Create a detector with additional user-defined patterns from config.
-    pub fn with_custom_patterns(
-        custom: &[crate::config::settings::CustomPattern],
-    ) -> Self {
+    pub fn with_custom_patterns(custom: &[crate::config::settings::CustomPattern]) -> Self {
         let mut custom_patterns = Vec::new();
 
         for cp in custom {
@@ -1121,10 +1119,7 @@ impl PatternDetector {
                     });
                 }
                 Err(e) => {
-                    eprintln!(
-                        "[!] Skipping invalid custom pattern \"{}\": {}",
-                        cp.name, e
-                    );
+                    eprintln!("[!] Skipping invalid custom pattern \"{}\": {}", cp.name, e);
                 }
             }
         }
@@ -1141,7 +1136,11 @@ impl PatternDetector {
     }
 
     /// Scan a line and return matches with their column positions
-    pub fn scan_line_with_positions(&self, line: &str, entropy_threshold: f64) -> Vec<PatternMatch> {
+    pub fn scan_line_with_positions(
+        &self,
+        line: &str,
+        entropy_threshold: f64,
+    ) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut seen_ranges: Vec<(usize, usize)> = Vec::new();
 
@@ -1156,7 +1155,9 @@ impl PatternDetector {
                 let col_end = mat.end();
 
                 // Deduplicate: skip if this range overlaps with an already-found match
-                let dominated = seen_ranges.iter().any(|&(s, e)| s <= col_start && col_end <= e);
+                let dominated = seen_ranges
+                    .iter()
+                    .any(|&(s, e)| s <= col_start && col_end <= e);
                 if dominated {
                     continue;
                 }
@@ -1378,7 +1379,8 @@ mod tests {
     #[test]
     fn test_sendgrid_api_key_detection() {
         let detector = PatternDetector::new();
-        let line = "SENDGRID_API_KEY=SG.abcdefghijklmnopqrstuv.abcdefghijklmnopqrstuvwxyz0123456789ABCDE";
+        let line =
+            "SENDGRID_API_KEY=SG.abcdefghijklmnopqrstuv.abcdefghijklmnopqrstuvwxyz0123456789ABCDE";
         let secrets = detector.scan_line(line, 3.0);
         assert!(!secrets.is_empty());
         assert!(has_type(&secrets, SecretType::SendGridApiKey));
@@ -1396,7 +1398,8 @@ mod tests {
     #[test]
     fn test_slack_webhook_detection() {
         let detector = PatternDetector::new();
-        let line = "WEBHOOK=https://hooks.slack.com/services/T01234567/B01234567/abcdefghijklmnopqrstuvwx";
+        let line =
+            "WEBHOOK=https://hooks.slack.com/services/T01234567/B01234567/abcdefghijklmnopqrstuvwx";
         let secrets = detector.scan_line(line, 3.0);
         assert!(!secrets.is_empty());
         assert!(has_type(&secrets, SecretType::SlackWebhook));
@@ -1430,7 +1433,8 @@ mod tests {
     fn test_pypi_token_detection() {
         let detector = PatternDetector::new();
         // After the prefix `pypi-AgEIcHlwaS5vcmc`, need 50+ alphanumeric chars
-        let line = "PYPI_TOKEN=pypi-AgEIcHlwaS5vcmcabcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmn";
+        let line =
+            "PYPI_TOKEN=pypi-AgEIcHlwaS5vcmcabcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmn";
         let secrets = detector.scan_line(line, 3.0);
         assert!(!secrets.is_empty(), "PyPI token should be detected");
         assert!(has_type(&secrets, SecretType::PyPiApiToken));
@@ -1454,7 +1458,8 @@ mod tests {
     #[test]
     fn test_digitalocean_token_detection() {
         let detector = PatternDetector::new();
-        let line = "DO_TOKEN=dop_v1_abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+        let line =
+            "DO_TOKEN=dop_v1_abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
         let secrets = detector.scan_line(line, 3.0);
         assert!(!secrets.is_empty(), "DigitalOcean token should be detected");
         assert!(has_type(&secrets, SecretType::DigitalOceanToken));
@@ -1465,7 +1470,10 @@ mod tests {
         let detector = PatternDetector::new();
         let line = "VAULT_TOKEN=hvs.CAESIDR0YWxzby1uby1tb3JlLXRva2VuLTEyMzQ1Njc4OTBhYmNkZWY";
         let secrets = detector.scan_line(line, 3.0);
-        assert!(!secrets.is_empty(), "HashiCorp Vault token should be detected");
+        assert!(
+            !secrets.is_empty(),
+            "HashiCorp Vault token should be detected"
+        );
         assert!(has_type(&secrets, SecretType::HashiCorpVaultToken));
     }
 
@@ -1508,7 +1516,8 @@ mod tests {
     #[test]
     fn test_sentry_dsn_detection() {
         let detector = PatternDetector::new();
-        let line = "SENTRY_DSN=https://abcdef0123456789abcdef0123456789@o123456.ingest.sentry.io/1234567";
+        let line =
+            "SENTRY_DSN=https://abcdef0123456789abcdef0123456789@o123456.ingest.sentry.io/1234567";
         let secrets = detector.scan_line(line, 3.0);
         assert!(!secrets.is_empty(), "Sentry DSN should be detected");
         assert!(has_type(&secrets, SecretType::SentryDsn));
@@ -1531,7 +1540,11 @@ mod tests {
         let detector = PatternDetector::new();
         let line = "AWS_KEY=AKIAZ52HGXYRN4WBTEST GITHUB=ghp_1234567890123456789012345678901234";
         let secrets = detector.scan_line(line, 3.0);
-        assert!(secrets.len() >= 2, "Should find multiple secrets on one line, found: {}", secrets.len());
+        assert!(
+            secrets.len() >= 2,
+            "Should find multiple secrets on one line, found: {}",
+            secrets.len()
+        );
         assert!(has_type(&secrets, SecretType::AwsAccessKey));
         assert!(has_type(&secrets, SecretType::GitHubPat));
     }
@@ -1543,9 +1556,15 @@ mod tests {
         let matches = detector.scan_line_with_positions(line, 3.0);
         assert!(!matches.is_empty());
         // The ghp_ token should start after the =
-        let ghp_match = matches.iter().find(|m| matches!(m.secret.secret_type, SecretType::GitHubPat)).unwrap();
+        let ghp_match = matches
+            .iter()
+            .find(|m| matches!(m.secret.secret_type, SecretType::GitHubPat))
+            .unwrap();
         assert!(ghp_match.column_start > 0, "Column start should be > 0");
-        assert!(ghp_match.column_end > ghp_match.column_start, "Column end should be > start");
+        assert!(
+            ghp_match.column_end > ghp_match.column_start,
+            "Column end should be > start"
+        );
     }
 
     // ═══════════════════════════════════════

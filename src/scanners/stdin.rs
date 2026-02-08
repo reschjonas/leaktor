@@ -21,7 +21,10 @@ impl StdinScanner {
         }
     }
 
-    pub fn with_custom_patterns(mut self, patterns: Vec<crate::config::settings::CustomPattern>) -> Self {
+    pub fn with_custom_patterns(
+        mut self,
+        patterns: Vec<crate::config::settings::CustomPattern>,
+    ) -> Self {
         self.custom_patterns = patterns;
         self
     }
