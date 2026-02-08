@@ -7,32 +7,116 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+  build-and-release:
+    name: Build ${{ matrix.asset_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: leaktor
+            asset_name: leaktor-linux-amd64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: leaktor.exe
+            asset_name: leaktor-windows-amd64.exe
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact_name: leaktor
+            asset_name: leaktor-macos-amd64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: leaktor
+            asset_name: leaktor-macos-arm64
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
       with:
-        fetch-depth: 0
+        targets: ${{ matrix.target }}
+
+    - name: Install OpenSSL (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Build release binary
+      run: cargo build --release --target ${{ matrix.target }}
+      shell: bash
+
+    - name: Strip binary (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+    - name: Create archive (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      run: |
+        cd target/${{ matrix.target }}/release
+        tar czf ../../../${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
+        cd -
+
+    - name: Create archive (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd target/${{ matrix.target }}/release
+        7z a ../../../${{ matrix.asset_name }}.zip ${{ matrix.artifact_name }}
+        cd -
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.asset_name }}
+        path: |
+          target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          ${{ matrix.asset_name }}.tar.gz
+          ${{ matrix.asset_name }}.zip
+
+  release:
+    name: Create Release
+    needs: build-and-release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Prepare release assets
+      run: |
+        mkdir -p release-assets
+        # Copy binaries and archives
+        for dir in artifacts/*/; do
+          cp "$dir"*.tar.gz release-assets/ 2>/dev/null || true
+          cp "$dir"*.zip release-assets/ 2>/dev/null || true
+          # Copy raw binaries
+          for f in "$dir"leaktor "$dir"leaktor.exe; do
+            if [ -f "$f" ]; then
+              name=$(basename "$dir")
+              cp "$f" "release-assets/$name"
+            fi
+          done
+        done
+        ls -la release-assets/
 
     - name: Get version from tag
       id: get_version
       run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Leaktor v${{ steps.get_version.outputs.VERSION }}
+        name: Leaktor v${{ steps.get_version.outputs.VERSION }}
         body: |
           ## Leaktor v${{ steps.get_version.outputs.VERSION }}
 
@@ -67,120 +151,41 @@ jobs:
           cargo install leaktor
           ```
 
-          ### Assets
-          See below for pre-built binaries for all platforms.
-
           ### Changelog
           See [CHANGELOG.md](https://github.com/reschjonas/leaktor/blob/master/CHANGELOG.md) for details.
-        draft: false
-        prerelease: false
-
-  build-and-upload:
-    name: Build and Upload
-    needs: create-release
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: leaktor
-            asset_name: leaktor-linux-amd64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: leaktor.exe
-            asset_name: leaktor-windows-amd64.exe
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: leaktor
-            asset_name: leaktor-macos-amd64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: leaktor
-            asset_name: leaktor-macos-arm64
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
-
-    - name: Build release binary
-      run: |
-        if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ] || [ "${{ matrix.target }}" = "aarch64-apple-darwin" ]; then
-          cargo build --release --target ${{ matrix.target }} --features vendored-openssl
-        else
-          cargo build --release --target ${{ matrix.target }}
-        fi
-      shell: bash
-
-    - name: Strip binary (Linux/macOS)
-      if: matrix.os != 'windows-latest'
-      run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-
-    - name: Create archive (Linux/macOS)
-      if: matrix.os != 'windows-latest'
-      run: |
-        cd target/${{ matrix.target }}/release
-        tar czf ../../../${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
-        cd -
-
-    - name: Create archive (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        cd target/${{ matrix.target }}/release
-        7z a ../../../${{ matrix.asset_name }}.zip ${{ matrix.artifact_name }}
-        cd -
-
-    - name: Upload binary
-      uses: actions/upload-release-asset@v1
+        files: release-assets/*
+        fail_on_unmatched_files: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-        asset_name: ${{ matrix.asset_name }}
-        asset_content_type: application/octet-stream
 
-    - name: Upload archive (Linux/macOS)
-      if: matrix.os != 'windows-latest'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./${{ matrix.asset_name }}.tar.gz
-        asset_name: ${{ matrix.asset_name }}.tar.gz
-        asset_content_type: application/gzip
-
-    - name: Upload archive (Windows)
-      if: matrix.os == 'windows-latest'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./${{ matrix.asset_name }}.zip
-        asset_name: ${{ matrix.asset_name }}.zip
-        asset_content_type: application/zip
-
-  publish-crate:
-    name: Publish to crates.io
-    needs: build-and-upload
+  docker:
+    name: Docker Image
+    needs: build-and-release
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-    - name: Publish to crates.io
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_TOKEN }}
-      run: cargo publish
-      continue-on-error: true
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Get version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: true
+        tags: |
+          ghcr.io/reschjonas/leaktor:latest
+          ghcr.io/reschjonas/leaktor:${{ github.ref_name }}

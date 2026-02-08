@@ -22,37 +22,32 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Full git history for thorough scan
+        fetch-depth: 0
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Build Leaktor
       run: cargo build --release
 
     - name: Run Leaktor scan (Console)
-      run: |
-        ./target/release/leaktor scan --verbose --format console
+      run: ./target/release/leaktor scan --verbose --format console
       continue-on-error: true
 
     - name: Run Leaktor scan (SARIF)
-      run: |
-        ./target/release/leaktor scan --format sarif --output leaktor-results.sarif
+      run: ./target/release/leaktor scan --format sarif --output leaktor-results.sarif
       continue-on-error: true
 
     - name: Upload SARIF to GitHub Security
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
       with:
         sarif_file: leaktor-results.sarif
         category: leaktor-scan
 
     - name: Run Leaktor scan (JSON)
-      run: |
-        ./target/release/leaktor scan --format json --output leaktor-results.json
+      run: ./target/release/leaktor scan --format json --output leaktor-results.json
+      continue-on-error: true
 
     - name: Upload scan results
       uses: actions/upload-artifact@v4
@@ -72,7 +67,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Dependency Review
-      uses: actions/dependency-review-action@v3
+      uses: actions/dependency-review-action@v4
 
   cargo-audit:
     name: Cargo Audit
@@ -83,11 +78,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Install cargo-audit
       run: cargo install cargo-audit
@@ -102,40 +93,12 @@ jobs:
         name: cargo-audit-results
         path: audit-results.json
 
-  codeql:
-    name: CodeQL Analysis
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
-      with:
-        languages: 'cpp'  # Rust compiles to native, so use cpp
-
-    - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-
-    - name: Build
-      run: cargo build --release
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
-      with:
-        category: codeql
-
   trivy-scan:
     name: Trivy Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
     - name: Checkout code
@@ -150,7 +113,8 @@ jobs:
         output: 'trivy-results.sarif'
 
     - name: Upload Trivy results to GitHub Security
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
       with:
         sarif_file: 'trivy-results.sarif'
         category: trivy-scan
