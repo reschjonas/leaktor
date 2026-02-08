@@ -52,6 +52,22 @@ const SKIP_PREFIXES: &[&str] = &[
     "var/log/",
 ];
 
+/// Files that contain legitimate cryptographic material (CA certificates, key
+/// stores) and are notorious sources of false positives when scanning Docker
+/// images.  These files match certificate/key patterns but are public trust
+/// anchors, not secrets.
+const SKIP_FILES: &[&str] = &[
+    "etc/ssl/certs/ca-certificates.crt",
+    "etc/ssl/certs/ca-bundle.crt",
+    "etc/ssl/cert.pem",
+    "etc/pki/tls/certs/ca-bundle.crt",
+    "etc/pki/tls/certs/ca-bundle.trust.crt",
+    "etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+    "etc/pki/ca-trust/extracted/openssl/ca-bundle.trust.crt",
+    "usr/share/ca-certificates/",
+    "etc/ca-certificates/",
+];
+
 /// Scanner for Docker container images.
 pub struct DockerScanner {
     image: String,
@@ -214,6 +230,11 @@ impl DockerScanner {
 
             // Skip known non-interesting system paths
             if SKIP_PREFIXES.iter().any(|pfx| path_str.starts_with(pfx)) {
+                continue;
+            }
+
+            // Skip certificate stores and CA bundles (high false-positive sources)
+            if SKIP_FILES.iter().any(|f| path_str == *f || path_str.starts_with(f)) {
                 continue;
             }
 

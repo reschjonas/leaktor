@@ -402,7 +402,28 @@ impl FilesystemScanner {
             "scan-results.json",
             "leaktor-results.json",
         ];
-        output_filenames.contains(&filename)
+        if output_filenames.contains(&filename) {
+            return true;
+        }
+
+        // Detect leaktor JSON output files by content signature.
+        // Leaktor JSON output starts with `{"version": "X.Y.Z", ...` and
+        // contains `"total_findings"` and `"findings"` in the header, which
+        // is a schema combination unlikely to appear in user source files.
+        if ext == "json" {
+            if let Ok(content) = fs::read_to_string(path) {
+                // Check the first 300 bytes for the leaktor schema signature
+                let header: String = content.chars().take(300).collect();
+                if header.contains("\"version\"")
+                    && header.contains("\"total_findings\"")
+                    && header.contains("\"findings\"")
+                {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     fn is_minified(&self, content: &str) -> bool {

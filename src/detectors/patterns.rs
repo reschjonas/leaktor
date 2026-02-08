@@ -289,6 +289,15 @@ lazy_static! {
             severity: Severity::High,
             confidence_base: 0.85,
         },
+        // Datadog API keys with the `ddapi_` prefix (used by some Datadog
+        // integrations and CLI tools).  Must come before the generic Close CRM
+        // `api_*` pattern so the more specific rule wins.
+        Pattern {
+            name: SecretType::DatadogApiKey,
+            regex: Regex::new(r"ddapi_[a-zA-Z0-9]{20,}").unwrap(),
+            severity: Severity::High,
+            confidence_base: 0.90,
+        },
         Pattern {
             name: SecretType::DatadogAppKey,
             regex: Regex::new(r#"(?i)dd.?app.?key.{0,20}['"]([0-9a-f]{40})['"]"#).unwrap(),
@@ -2375,7 +2384,7 @@ lazy_static! {
         },
         Pattern {
             name: SecretType::CloseCrmApiKey,
-            regex: Regex::new(r"api_[a-zA-Z0-9\.]{30,}").unwrap(),
+            regex: Regex::new(r#"(?i)close.{0,20}(api_[a-zA-Z0-9\.]{30,})"#).unwrap(),
             severity: Severity::High,
             confidence_base: 0.80,
         },

@@ -441,9 +441,116 @@ impl Config {
         }
     }
 
-    /// Save configuration to a TOML file
+    /// Save configuration to a TOML file.
+    ///
+    /// Uses a custom serialization order that places all scalar/simple keys
+    /// before `[[custom_patterns]]` and `[[allowlist]]` table arrays.  This
+    /// avoids the TOML "section absorption" trap where keys written *after*
+    /// a `[[table_array]]` header get silently absorbed into that section,
+    /// triggering `deny_unknown_fields` errors.
     pub fn to_toml_file(&self, path: &Path) -> Result<()> {
-        let content = toml::to_string_pretty(self)?;
+        let mut content = String::new();
+        content.push_str("# Leaktor configuration\n");
+        content.push_str("# https://github.com/reschjonas/leaktor\n");
+        content.push_str("#\n");
+        content.push_str(
+            "# IMPORTANT: All top-level keys (like entropy_threshold, report_severities)\n",
+        );
+        content.push_str(
+            "# must appear BEFORE any [[custom_patterns]] or [[allowlist]] sections.\n",
+        );
+        content.push_str(
+            "# TOML treats keys after [[section]] headers as part of that section.\n\n",
+        );
+
+        // Scalar / simple keys first
+        content.push_str(&format!("entropy_threshold = {}\n", self.entropy_threshold));
+        content.push_str(&format!("min_confidence = {}\n", self.min_confidence));
+        content.push_str(&format!(
+            "enable_validation = {}\n",
+            self.enable_validation
+        ));
+        content.push_str(&format!("scan_git_history = {}\n", self.scan_git_history));
+        if let Some(depth) = self.max_git_depth {
+            content.push_str(&format!("max_git_depth = {}\n", depth));
+        }
+        content.push_str(&format!("respect_gitignore = {}\n", self.respect_gitignore));
+        content.push_str(&format!("max_file_size = {}\n", self.max_file_size));
+        content.push_str(&format!("exclude_tests = {}\n", self.exclude_tests));
+        content.push_str(&format!("exclude_docs = {}\n", self.exclude_docs));
+
+        // report_severities as inline array
+        let sevs: Vec<String> = self.report_severities.iter().map(|s| format!("\"{}\"", s)).collect();
+        content.push_str(&format!("report_severities = [{}]\n", sevs.join(", ")));
+
+        content.push_str(&format!(
+            "max_concurrent_validations = {}\n",
+            self.max_concurrent_validations
+        ));
+        content.push_str(&format!(
+            "validation_delay_ms = {}\n",
+            self.validation_delay_ms
+        ));
+        content.push_str(&format!(
+            "validation_max_retries = {}\n",
+            self.validation_max_retries
+        ));
+
+        // Table arrays last
+        content.push('\n');
+        if self.custom_patterns.is_empty() {
+            content.push_str("# [[custom_patterns]]\n");
+            content.push_str("# name = \"Internal API Key\"\n");
+            content.push_str("# regex = \"int_key_[0-9a-f]{32}\"\n");
+            content.push_str("# severity = \"HIGH\"\n");
+            content.push_str("# confidence = 0.85\n");
+            content.push_str("# description = \"Internal API key\"\n\n");
+        } else {
+            for cp in &self.custom_patterns {
+                content.push_str("[[custom_patterns]]\n");
+                content.push_str(&format!("name = \"{}\"\n", cp.name));
+                content.push_str(&format!("regex = \"{}\"\n", cp.regex));
+                content.push_str(&format!("severity = \"{}\"\n", cp.severity));
+                content.push_str(&format!("confidence = {}\n", cp.confidence));
+                if let Some(ref desc) = cp.description {
+                    content.push_str(&format!("description = \"{}\"\n", desc));
+                }
+                content.push('\n');
+            }
+        }
+
+        if self.allowlist.is_empty() {
+            content.push_str("# [[allowlist]]\n");
+            content.push_str("# description = \"Suppress Sentry DSNs\"\n");
+            content.push_str("# secret_types = [\"Sentry DSN\"]\n");
+        } else {
+            for rule in &self.allowlist {
+                content.push_str("[[allowlist]]\n");
+                if let Some(ref desc) = rule.description {
+                    content.push_str(&format!("description = \"{}\"\n", desc));
+                }
+                if !rule.secret_types.is_empty() {
+                    let types: Vec<String> =
+                        rule.secret_types.iter().map(|t| format!("\"{}\"", t)).collect();
+                    content.push_str(&format!("secret_types = [{}]\n", types.join(", ")));
+                }
+                if !rule.paths.is_empty() {
+                    let paths: Vec<String> =
+                        rule.paths.iter().map(|p| format!("\"{}\"", p)).collect();
+                    content.push_str(&format!("paths = [{}]\n", paths.join(", ")));
+                }
+                if let Some(ref re) = rule.value_regex {
+                    content.push_str(&format!("value_regex = \"{}\"\n", re));
+                }
+                if !rule.severities.is_empty() {
+                    let sevs: Vec<String> =
+                        rule.severities.iter().map(|s| format!("\"{}\"", s)).collect();
+                    content.push_str(&format!("severities = [{}]\n", sevs.join(", ")));
+                }
+                content.push('\n');
+            }
+        }
+
         fs::write(path, content)?;
         Ok(())
     }

@@ -84,7 +84,7 @@ enum Commands {
         entropy: f64,
 
         /// Validate detected secrets against their APIs
-        #[arg(short, long, help = "Validate secrets are active (requires network)")]
+        #[arg(short = 'V', long, help = "Validate secrets are active (requires network)")]
         validate: bool,
 
         /// Show verbose output with additional details
@@ -332,7 +332,7 @@ enum Commands {
         entropy: f64,
 
         /// Validate detected secrets
-        #[arg(short, long, help = "Validate secrets are active (requires network)")]
+        #[arg(short = 'V', long, help = "Validate secrets are active (requires network)")]
         validate: bool,
 
         /// Show verbose output
@@ -389,7 +389,7 @@ enum Commands {
         entropy: f64,
 
         /// Validate detected secrets
-        #[arg(short, long, help = "Validate secrets are active (requires network)")]
+        #[arg(short = 'V', long, help = "Validate secrets are active (requires network)")]
         validate: bool,
 
         /// Show verbose output

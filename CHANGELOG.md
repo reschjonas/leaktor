@@ -5,6 +5,24 @@ All notable changes to Leaktor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-02-08
+
+### Fixed
+
+- **Terraform state scanner misses context-dependent secrets** -- Secrets like AWS Secret Keys whose patterns require keyword context (e.g. `aws...secret=`) were missed when the JSON key was just `"secret"`. The scanner now uses the Terraform resource type (e.g. `aws_iam_access_key`) to enrich the key name, so `"secret": "wJalr..."` inside an `aws_iam_access_key` resource correctly matches the AWS Secret Key pattern.
+- **JSON output files get rescanned** -- Running `leaktor scan --format json -o scan.json` and then scanning again would detect secrets inside the JSON report itself, inflating finding counts by ~63%. The scanner now detects leaktor JSON output files by their schema signature (`version` + `total_findings` + `findings` header) and skips them automatically, regardless of filename.
+- **Datadog API key misidentified as Close CRM** -- Keys with the `ddapi_` prefix were matched by the overly broad Close CRM pattern (`api_[a-zA-Z0-9.]{30,}`). Added a dedicated `ddapi_` Datadog pattern with higher confidence, and tightened the Close CRM pattern to require a `close` context keyword.
+- **Blast radius includes scan output files** -- `leaktor trace` searched JSON scan output files, inflating reference counts. Trace now applies the same leaktor-schema detection to skip output files.
+
+### Improved
+
+- **Docker Compose mixed format warning** -- Mixing list-style (`- KEY=val`) and mapping-style (`KEY: val`) in the same `environment:` block now produces a clear diagnostic tip explaining the issue, and falls back to line-based scanning instead of silently giving up.
+- **Config TOML ordering trap** -- `leaktor config` now generates all scalar keys (like `report_severities`) before `[[custom_patterns]]` and `[[allowlist]]` table arrays, with a comment warning about TOML section ordering. Previously, keys placed after `[[sections]]` were silently absorbed into that section.
+- **`-v` short flag disambiguation** -- `-v` now maps to `--verbose` (the conventional usage). `--validate` is now `-V` (uppercase). Previously both flags competed for `-v`, causing confusing behavior.
+- **Docker image false positives** -- Certificate store files (`/etc/ssl/certs/ca-certificates.crt` and similar) are now skipped when scanning Docker images. Scanning `alpine:latest` previously produced 11 false positives; now produces 0.
+
+[0.4.1]: https://github.com/reschjonas/leaktor/compare/v0.4.0...v0.4.1
+
 ## [0.4.0] - 2026-02-08
 
 ### Fixed

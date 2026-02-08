@@ -141,6 +141,8 @@ pub fn trace_command(
             "results.json",
             "results.sarif",
             "scan.json",
+            "scan-results.json",
+            "leaktor-results.json",
         ];
 
         let walker = ignore::WalkBuilder::new(&path)
@@ -166,6 +168,16 @@ pub fn trace_command(
             }
 
             if let Ok(content) = std::fs::read_to_string(p) {
+                // Detect leaktor JSON output by schema signature (first 300 chars)
+                if p.extension().and_then(|e| e.to_str()) == Some("json") {
+                    let header: String = content.chars().take(300).collect();
+                    if header.contains("\"version\"")
+                        && header.contains("\"total_findings\"")
+                        && header.contains("\"findings\"")
+                    {
+                        continue;
+                    }
+                }
                 for (line_num, line) in content.lines().enumerate() {
                     if line.contains(search_value.as_str()) {
                         reference_files.push((

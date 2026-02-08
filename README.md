@@ -752,7 +752,7 @@ If you use the [pre-commit](https://pre-commit.com) framework, add Leaktor to yo
 ```yaml
 repos:
   - repo: https://github.com/reschjonas/leaktor
-    rev: v0.4.0
+    rev: v0.4.1
     hooks:
       - id: leaktor
 ```
